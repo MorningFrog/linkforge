@@ -2,6 +2,7 @@
 
 ## 0.1.0 - Unreleased
 
+- Added CLI help descriptions and shell completion generation for PowerShell, Bash, Zsh, and Fish.
 - Improved Windows symbolic link creation by requesting unprivileged symlink support when Developer Mode is enabled.
 - Added core and CLI support for creating symbolic links and hard links.
 - Added same-file checks, hard link count inspection, hard-link sibling discovery, and directory hard-link group scanning.

@@ -24,15 +24,33 @@ linkforge link-count <path>
 linkforge siblings <path> [--root <dir>]
 linkforge scan-groups <root>
 linkforge clone-tree <source-dir> <dest-dir> [--force]
+linkforge completions <shell>
 ```
 
 Commands that create links or clone directory trees fail when the destination already exists. Pass `--force` to replace an existing file or symbolic link; existing real directories are never replaced.
+
+Run `linkforge help` to list commands, or `linkforge help <command>` to show help for a specific command.
 
 The `clone-tree` command copies the source directory tree and preserves hard link relationships inside the clone. Symbolic links are copied as links rather than followed.
 
 On Windows, `siblings` can enumerate sibling hard-link paths directly through the operating system. On Linux, pass `--root <dir>` to scan the selected directory tree for sibling hard links.
 
 On Windows, creating symbolic links without administrator privileges requires Windows Developer Mode. If Developer Mode is disabled and the process is not elevated, the operating system will reject symlink creation.
+
+## Shell Completions
+
+LinkForge can generate shell completion scripts for PowerShell, Bash, Zsh, and Fish. The command prints the script to stdout so you can install it wherever your shell expects completions.
+
+```powershell
+$completion = linkforge completions powershell | Out-String
+Invoke-Expression $completion
+```
+
+```bash
+linkforge completions bash
+linkforge completions zsh
+linkforge completions fish
+```
 
 ## Platform Support
 
