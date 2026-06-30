@@ -1,0 +1,7 @@
+[package]
+name = "linkforge-gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+linkforge-core = { version = "0.1.0", path = "../linkforge-core" }

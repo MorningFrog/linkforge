@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/linkforge-core",
+    "crates/linkforge-cli",
+    "crates/linkforge-gui",
+]
