@@ -2,6 +2,31 @@
 
 Thank you for contributing to LinkForge.
 
+## Local Development
+
+LinkForge is a Cargo workspace with separate crates for the core library, CLI, and GUI entry point.
+
+Common local commands:
+
+```text
+cargo build
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo fmt
+```
+
+Run the CLI locally with `cargo run -p linkforge-cli --` followed by a LinkForge command:
+
+```text
+cargo run -p linkforge-cli -- link-count path/to/file
+cargo run -p linkforge-cli -- same-file path/to/a path/to/b
+cargo run -p linkforge-cli -- scan-groups path/to/root
+```
+
+Before submitting changes, run `cargo fmt`, `cargo test`, and `cargo clippy --all-targets -- -D warnings`.
+
+On Windows, symbolic link creation without administrator privileges requires Windows Developer Mode. LinkForge asks Windows to allow unprivileged symlink creation, but Windows still rejects the request when Developer Mode is disabled and the process is not elevated. Tests account for missing symlink privileges, but manual symlink commands can still fail with the operating system permission error.
+
 ## Git Commit Message
 
 Git commit messages in this project must follow the Conventional Commits specification.

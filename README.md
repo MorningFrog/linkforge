@@ -4,7 +4,7 @@ LinkForge is a tool for quickly creating and managing file symbolic links and ha
 
 ## Feature Overview
 
-LinkForge's core feature scope includes:
+LinkForge currently supports these core and CLI features:
 
 - Creating symbolic links for files and directories.
 - Creating hard links for files.
@@ -14,9 +14,29 @@ LinkForge's core feature scope includes:
 - Scanning a directory tree to find hard link groups.
 - Cloning a directory tree while preserving hard link relationships, so files that were hard-linked in the source remain hard-linked in the clone.
 
+## CLI Usage
+
+```text
+linkforge symlink <source> <link> [--force]
+linkforge hardlink <source> <link> [--force]
+linkforge same-file <path-a> <path-b>
+linkforge link-count <path>
+linkforge siblings <path> [--root <dir>]
+linkforge scan-groups <root>
+linkforge clone-tree <source-dir> <dest-dir> [--force]
+```
+
+Commands that create links or clone directory trees fail when the destination already exists. Pass `--force` to replace an existing file or symbolic link; existing real directories are never replaced.
+
+The `clone-tree` command copies the source directory tree and preserves hard link relationships inside the clone. Symbolic links are copied as links rather than followed.
+
+On Windows, `siblings` can enumerate sibling hard-link paths directly through the operating system. On Linux, pass `--root <dir>` to scan the selected directory tree for sibling hard links.
+
+On Windows, creating symbolic links without administrator privileges requires Windows Developer Mode. If Developer Mode is disabled and the process is not elevated, the operating system will reject symlink creation.
+
 ## Platform Support
 
-- Core link management supports Windows and Linux.
+- Core link management and the CLI support Windows and Linux.
 - The GUI is designed for Windows desktop environments and the Linux GNOME desktop environment.
 
 ## Project Structure
