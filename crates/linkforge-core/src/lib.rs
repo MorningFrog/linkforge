@@ -372,7 +372,11 @@ fn windows_hard_link_siblings(path: &Path) -> io::Result<Vec<PathBuf>> {
 
     let mut paths = Vec::new();
     loop {
-        let raw = std::ffi::OsString::from_wide(&buffer[..buffer_len as usize]);
+        let mut path_len = buffer_len as usize;
+        while path_len > 0 && buffer[path_len - 1] == 0 {
+            path_len -= 1;
+        }
+        let raw = std::ffi::OsString::from_wide(&buffer[..path_len]);
         let link_path = PathBuf::from(raw);
         paths.push(match drive {
             Some(drive) => PathBuf::from(format!("{drive}:{}", link_path.display())),
@@ -386,7 +390,7 @@ fn windows_hard_link_siblings(path: &Path) -> io::Result<Vec<PathBuf>> {
             unsafe {
                 FindClose(handle);
             }
-            if error.raw_os_error() == Some(18) {
+            if matches!(error.raw_os_error(), Some(18 | 38)) {
                 break;
             }
             return Err(error);
@@ -510,6 +514,29 @@ mod tests {
         fs::hard_link(&source, &hardlink).unwrap();
 
         let siblings = hard_link_siblings(&source, Some(temp.path())).unwrap();
+
+        assert_eq!(siblings.len(), 2);
+        assert!(siblings.contains(&source));
+        assert!(siblings.contains(&hardlink));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_finds_siblings_without_scan_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.txt");
+        let hardlink = temp.path().join("hard.txt");
+        fs::write(&source, "hello").unwrap();
+        fs::hard_link(&source, &hardlink).unwrap();
+
+        let mut siblings: Vec<PathBuf> = hard_link_siblings(&source, Option::<&Path>::None)
+            .unwrap()
+            .into_iter()
+            .map(|path| fs::canonicalize(path).unwrap())
+            .collect();
+        siblings.sort();
+        let source = fs::canonicalize(source).unwrap();
+        let hardlink = fs::canonicalize(hardlink).unwrap();
 
         assert_eq!(siblings.len(), 2);
         assert!(siblings.contains(&source));
