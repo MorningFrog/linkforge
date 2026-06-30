@@ -1,3 +1,22 @@
+mod backend;
+
 fn main() {
-    println!("Hello, world!");
+    let launch_context = backend::LaunchContext::from_env();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(launch_context)
+        .invoke_handler(tauri::generate_handler![
+            backend::initial_context,
+            backend::create_symlink,
+            backend::create_hardlink,
+            backend::same_file,
+            backend::link_count,
+            backend::siblings,
+            backend::scan_groups,
+            backend::clone_tree,
+            backend::reveal_path,
+        ])
+        .run(tauri::generate_context!())
+        .expect("failed to run LinkForge GUI");
 }

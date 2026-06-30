@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkForge</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">LF</span>
+          <div>
+            <h1>LinkForge</h1>
+            <p id="platform-label">Desktop</p>
+          </div>
+        </div>
+        <nav class="tabs" aria-label="Views">
+          <button class="tab active" data-view="quick">Quick</button>
+          <button class="tab" data-view="inspect">Inspect</button>
+          <button class="tab" data-view="groups">Groups</button>
+          <button class="tab" data-view="clone">Clone</button>
+          <button class="tab" data-view="about">About</button>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <h2 id="view-title">Quick Action</h2>
+            <p id="context-label">Ready</p>
+          </div>
+          <button id="clear-status" class="ghost-button">Clear</button>
+        </header>
+
+        <section id="status" class="status idle">No recent operation.</section>
+
+        <section id="view-quick" class="view active">
+          <div class="toolbar segmented">
+            <button class="mode active" data-mode="symlink">Symlink</button>
+            <button class="mode" data-mode="hardlink">Hard link</button>
+            <button class="mode" data-mode="link-count">Link count</button>
+            <button class="mode" data-mode="siblings">Siblings</button>
+          </div>
+
+          <form id="quick-form" class="form-grid">
+            <label>
+              Source
+              <span class="field-row">
+                <input id="quick-source" type="text" autocomplete="off" />
+                <button type="button" class="icon-button browse-file" data-target="quick-source" title="Browse file">...</button>
+                <button type="button" class="icon-button browse-dir" data-target="quick-source" title="Browse directory">D</button>
+              </span>
+            </label>
+
+            <label class="quick-link-only">
+              Link path
+              <span class="field-row">
+                <input id="quick-link" type="text" autocomplete="off" />
+                <button type="button" class="icon-button save-path" data-target="quick-link" title="Choose path">...</button>
+              </span>
+            </label>
+
+            <label class="quick-siblings-only hidden">
+              Scan root
+              <span class="field-row">
+                <input id="quick-root" type="text" autocomplete="off" />
+                <button type="button" class="icon-button browse-dir" data-target="quick-root" title="Browse directory">D</button>
+              </span>
+            </label>
+
+            <label class="check-row quick-force-only">
+              <input id="quick-force" type="checkbox" />
+              <span>Replace existing file or symlink</span>
+            </label>
+
+            <button type="submit" class="primary-button">Run</button>
+          </form>
+        </section>
+
+        <section id="view-inspect" class="view">
+          <div class="split">
+            <form id="same-file-form" class="tool-panel">
+              <h3>Same File</h3>
+              <label>
+                Path A
+                <span class="field-row">
+                  <input id="same-a" type="text" autocomplete="off" />
+                  <button type="button" class="icon-button browse-file" data-target="same-a" title="Browse file">...</button>
+                </span>
+              </label>
+              <label>
+                Path B
+                <span class="field-row">
+                  <input id="same-b" type="text" autocomplete="off" />
+                  <button type="button" class="icon-button browse-file" data-target="same-b" title="Browse file">...</button>
+                </span>
+              </label>
+              <button type="submit" class="primary-button">Compare</button>
+            </form>
+
+            <form id="inspect-form" class="tool-panel">
+              <h3>File Details</h3>
+              <label>
+                Path
+                <span class="field-row">
+                  <input id="inspect-path" type="text" autocomplete="off" />
+                  <button type="button" class="icon-button browse-file" data-target="inspect-path" title="Browse file">...</button>
+                </span>
+              </label>
+              <label>
+                Scan root
+                <span class="field-row">
+                  <input id="inspect-root" type="text" autocomplete="off" />
+                  <button type="button" class="icon-button browse-dir" data-target="inspect-root" title="Browse directory">D</button>
+                </span>
+              </label>
+              <div class="button-row">
+                <button type="button" id="inspect-link-count" class="secondary-button">Link Count</button>
+                <button type="button" id="inspect-siblings" class="secondary-button">Siblings</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="view-groups" class="view">
+          <form id="groups-form" class="form-grid">
+            <label>
+              Root
+              <span class="field-row">
+                <input id="groups-root" type="text" autocomplete="off" />
+                <button type="button" class="icon-button browse-dir" data-target="groups-root" title="Browse directory">D</button>
+              </span>
+            </label>
+            <button type="submit" class="primary-button">Scan</button>
+          </form>
+        </section>
+
+        <section id="view-clone" class="view">
+          <form id="clone-form" class="form-grid">
+            <label>
+              Source directory
+              <span class="field-row">
+                <input id="clone-source" type="text" autocomplete="off" />
+                <button type="button" class="icon-button browse-dir" data-target="clone-source" title="Browse directory">D</button>
+              </span>
+            </label>
+            <label>
+              Destination directory
+              <span class="field-row">
+                <input id="clone-dest" type="text" autocomplete="off" />
+                <button type="button" class="icon-button save-path" data-target="clone-dest" title="Choose path">...</button>
+              </span>
+            </label>
+            <label class="check-row">
+              <input id="clone-force" type="checkbox" />
+              <span>Replace existing file or symlink</span>
+            </label>
+            <button type="submit" class="primary-button">Clone</button>
+          </form>
+        </section>
+
+        <section id="view-about" class="view">
+          <div class="about-grid">
+            <div class="tool-panel">
+              <h3>CLI Help</h3>
+              <p>Shell completions remain available through <code>linkforge completions &lt;shell&gt;</code>.</p>
+              <p>Supported shells: PowerShell, Bash, Zsh, Fish.</p>
+            </div>
+            <div class="tool-panel">
+              <h3>Context Menu</h3>
+              <p>Explorer and GNOME Files entries launch this app with <code>--context-action</code> and <code>--paths</code>.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="results">
+          <div class="results-header">
+            <h3>Results</h3>
+            <button id="copy-results" class="ghost-button">Copy</button>
+          </div>
+          <div id="results-list" class="results-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="path-menu" class="context-menu hidden" role="menu">
+      <button data-menu-action="copy">Copy path</button>
+      <button data-menu-action="reveal">Open location</button>
+      <button data-menu-action="link-count">Link count</button>
+      <button data-menu-action="siblings">Siblings</button>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+</html>

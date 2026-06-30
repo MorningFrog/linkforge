@@ -4,4 +4,6 @@ members = [
     "crates/linkforge-core",
     "crates/linkforge-cli",
     "crates/linkforge-gui",
+    "crates/linkforge-context-menu-windows",
+    "crates/linkforge-context-menu-gnome",
 ]

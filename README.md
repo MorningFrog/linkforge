@@ -14,6 +14,8 @@ LinkForge currently supports these core and CLI features:
 - Scanning a directory tree to find hard link groups.
 - Cloning a directory tree while preserving hard link relationships, so files that were hard-linked in the source remain hard-linked in the clone.
 
+The GUI exposes the same file-link management and inspection features through a Tauri desktop app. Shell completion generation remains a CLI-only helper.
+
 ## CLI Usage
 
 ```text
@@ -52,6 +54,28 @@ linkforge completions zsh
 linkforge completions fish
 ```
 
+## GUI Usage
+
+The GUI supports:
+
+- Quick creation of symbolic links and hard links.
+- Link count and same-file inspection.
+- Hard-link sibling discovery, including scan-root selection on platforms that require it.
+- Hard-link group scanning for a directory tree.
+- Directory tree cloning while preserving internal hard-link relationships.
+
+The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, Windows 10 and the Windows 11 classic menu use registry-based entries, and GNOME Files uses Nautilus scripts.
+
+For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
+
+### Windows Explorer Context Menu
+
+Windows 11 top-level menu integration is implemented by `crates/linkforge-context-menu-windows`. The classic registry fallback appears under "Show more options" on Windows 11. LinkForge does not recommend globally restoring the legacy Windows context menu because that changes system-wide Explorer behavior.
+
+### GNOME Files Context Menu
+
+GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`, which installs and removes LinkForge Nautilus scripts.
+
 ## Platform Support
 
 - Core link management and the CLI support Windows and Linux.
@@ -62,3 +86,6 @@ linkforge completions fish
 - `crates/linkforge-core`: Core link management logic.
 - `crates/linkforge-cli`: Command-line interface entry point.
 - `crates/linkforge-gui`: Graphical interface entry point.
+- `crates/linkforge-context-menu-windows`: Windows Explorer command extension for the Windows 11 top-level context menu.
+- `crates/linkforge-context-menu-gnome`: GNOME Files/Nautilus context-menu script installer.
+- `scripts/context-menu`: Compatibility wrappers and Windows registry/sparse-package entry points.
