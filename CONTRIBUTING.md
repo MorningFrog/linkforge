@@ -45,7 +45,7 @@ The shared context-menu launch protocol is:
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported actions are `symlink`, `hardlink`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`.
+Supported GUI-opening actions are `symlink`, `hardlink`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Windows classic context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while drop actions use small message boxes for conflicts, errors, and completion before exiting without opening the Tauri window.
 
 ### Context Menu Integration
 
@@ -68,11 +68,13 @@ Explorer usually notices new per-user context-menu entries in newly opened windo
 
 If registration fails with `0x80073D2E`, check that the generated manifest contains `<uap10:AllowExternalContent>true</uap10:AllowExternalContent>`. Sparse packages registered with `-ExternalLocation` must explicitly allow external content.
 
-If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settings under `Settings > System > For developers > Developer Mode`, then rerun the script. Windows requires Developer Mode or app sideloading to register the sparse package used by the Windows 11 top-level menu. Use the classic context-menu fallback if you do not want to enable Developer Mode.
+If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settings under `Settings > System > Advanced > Developer Mode`, then rerun the script. Windows requires Developer Mode or app sideloading to register the sparse package used by the Windows 11 top-level menu. Use the classic context-menu fallback if you do not want to enable Developer Mode.
 
 If registration fails with `0x80070057` and says `x-generate` is not a valid language, update the modern registration script so the manifest uses a concrete resource language such as `en-us`.
 
-Right-click a file to test `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Right-click a directory to test `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`.
+Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to test `Create Symlink from ...` and `Create Hard Link from ...`.
+
+For the two-step workflow, first pick a file or folder as the source. Then right-click a target folder or folder background and create a symlink or hard link from the picked source. Hard-link creation is only shown for picked file sources. If the target name already exists, test all three conflict choices: overwrite, automatically renamed link, and cancel.
 
 Remove the Windows 11 top-level context-menu entries after testing:
 

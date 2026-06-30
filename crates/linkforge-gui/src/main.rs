@@ -2,6 +2,9 @@ mod backend;
 
 fn main() {
     let launch_context = backend::LaunchContext::from_env();
+    if backend::handle_direct_context_action(&launch_context) {
+        return;
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

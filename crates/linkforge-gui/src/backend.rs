@@ -1,9 +1,23 @@
 use std::env;
+#[cfg(windows)]
+use std::fs;
 use std::io;
+#[cfg(windows)]
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
+
+#[cfg(windows)]
+use windows::Win32::Foundation::HWND;
+#[cfg(windows)]
+use windows::Win32::UI::WindowsAndMessaging::{
+    IDNO, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK, MB_YESNOCANCEL,
+    MESSAGEBOX_RESULT, MESSAGEBOX_STYLE, MessageBoxW,
+};
+#[cfg(windows)]
+use windows::core::PCWSTR;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -105,6 +119,218 @@ impl LaunchContext {
 #[tauri::command]
 pub fn initial_context(context: tauri::State<'_, LaunchContext>) -> LaunchContext {
     context.inner().clone()
+}
+
+#[cfg(windows)]
+pub fn handle_direct_context_action(context: &LaunchContext) -> bool {
+    match context.action.as_deref() {
+        Some("pick-source") => {
+            let Some(path) = context.paths.first() else {
+                show_error("No source path was provided.");
+                return true;
+            };
+            if let Err(error) = pick_source(Path::new(path)) {
+                show_error(&format!("Failed to pick link source:\n{error}"));
+            }
+            true
+        }
+        Some("drop-symlink") => {
+            invoke_drop_link(context.paths.first(), DirectLinkKind::Symlink);
+            true
+        }
+        Some("drop-hardlink") => {
+            invoke_drop_link(context.paths.first(), DirectLinkKind::Hardlink);
+            true
+        }
+        _ => false,
+    }
+}
+
+#[cfg(not(windows))]
+pub fn handle_direct_context_action(_context: &LaunchContext) -> bool {
+    false
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+enum DirectLinkKind {
+    Symlink,
+    Hardlink,
+}
+
+#[cfg(windows)]
+enum ConflictChoice {
+    Overwrite,
+    Rename,
+    Cancel,
+}
+
+#[cfg(windows)]
+fn invoke_drop_link(target: Option<&String>, kind: DirectLinkKind) {
+    match drop_link(target.map(Path::new), kind) {
+        Ok(Some(link)) => show_info(&format!("Created link:\n{}", link.display())),
+        Ok(None) => {}
+        Err(error) => show_error(&format!("Failed to create link:\n{error}")),
+    }
+}
+
+#[cfg(windows)]
+fn drop_link(target: Option<&Path>, kind: DirectLinkKind) -> io::Result<Option<PathBuf>> {
+    let Some(source) = picked_source() else {
+        return Err(io::Error::new(
+            ErrorKind::NotFound,
+            "no link source has been picked",
+        ));
+    };
+    let Some(target_dir) = target.filter(|path| path.is_dir()) else {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "select a target directory or right-click a directory background",
+        ));
+    };
+
+    if matches!(kind, DirectLinkKind::Hardlink) && !source.is_file() {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "hard links can only be created for files",
+        ));
+    }
+
+    let file_name = source.file_name().ok_or_else(|| {
+        io::Error::new(
+            ErrorKind::InvalidInput,
+            format!("source has no file name: {}", source.display()),
+        )
+    })?;
+    let mut link = target_dir.join(file_name);
+    let mut force = false;
+
+    if fs::symlink_metadata(&link).is_ok() {
+        match ask_conflict(&link) {
+            ConflictChoice::Overwrite => force = true,
+            ConflictChoice::Rename => link = available_link_path(target_dir, Path::new(file_name)),
+            ConflictChoice::Cancel => return Ok(None),
+        }
+    }
+
+    match kind {
+        DirectLinkKind::Symlink => linkforge_core::create_symlink(&source, &link, force),
+        DirectLinkKind::Hardlink => linkforge_core::create_hard_link(&source, &link, force),
+    }
+    .map_err(link_error)?;
+
+    Ok(Some(link))
+}
+
+#[cfg(windows)]
+fn link_error(error: io::Error) -> io::Error {
+    if error.raw_os_error() == Some(1314) {
+        return io::Error::new(
+            error.kind(),
+            format!(
+                "{error}. Creating symbolic links on Windows requires administrator privileges or Developer Mode."
+            ),
+        );
+    }
+    error
+}
+
+#[cfg(windows)]
+fn pick_source(path: &Path) -> io::Result<()> {
+    let state_path = picked_source_state_path();
+    if let Some(parent) = state_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(state_path, path.display().to_string())
+}
+
+#[cfg(windows)]
+fn picked_source() -> Option<PathBuf> {
+    let value = fs::read_to_string(picked_source_state_path()).ok()?;
+    let path = PathBuf::from(value.trim());
+    path.exists().then_some(path)
+}
+
+#[cfg(windows)]
+fn picked_source_state_path() -> PathBuf {
+    env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(env::temp_dir)
+        .join("LinkForge")
+        .join("picked-source.txt")
+}
+
+#[cfg(windows)]
+fn available_link_path(target_dir: &Path, source_name: &Path) -> PathBuf {
+    let stem = source_name
+        .file_stem()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(source_name.as_os_str())
+        .to_string_lossy();
+    let extension = source_name.extension().map(|value| value.to_string_lossy());
+
+    for index in 1.. {
+        let suffix = if index == 1 {
+            " - Link".to_string()
+        } else {
+            format!(" - Link ({index})")
+        };
+        let candidate_name = match extension.as_deref() {
+            Some(ext) if !ext.is_empty() => format!("{stem}{suffix}.{ext}"),
+            _ => format!("{stem}{suffix}"),
+        };
+        let candidate = target_dir.join(candidate_name);
+        if fs::symlink_metadata(&candidate).is_err() {
+            return candidate;
+        }
+    }
+
+    unreachable!("unbounded rename search should always return a candidate")
+}
+
+#[cfg(windows)]
+fn ask_conflict(path: &Path) -> ConflictChoice {
+    let message = format!(
+        "The target already exists:\n{}\n\nYes: overwrite it\nNo: create an automatically renamed link\nCancel: do nothing",
+        path.display()
+    );
+    let result = message_box(&message, "LinkForge", MB_YESNOCANCEL | MB_ICONQUESTION);
+    if result == IDYES {
+        ConflictChoice::Overwrite
+    } else if result == IDNO {
+        ConflictChoice::Rename
+    } else {
+        ConflictChoice::Cancel
+    }
+}
+
+#[cfg(windows)]
+fn show_info(message: &str) {
+    message_box(message, "LinkForge", MB_OK | MB_ICONINFORMATION);
+}
+
+#[cfg(windows)]
+fn show_error(message: &str) {
+    message_box(message, "LinkForge", MB_OK | MB_ICONERROR);
+}
+
+#[cfg(windows)]
+fn message_box(message: &str, title: &str, style: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
+    let message = wide_null(message);
+    let title = wide_null(title);
+    unsafe {
+        MessageBoxW(
+            Some(HWND::default()),
+            PCWSTR(message.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            style,
+        )
+    }
+}
+
+#[cfg(windows)]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[tauri::command]

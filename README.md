@@ -66,11 +66,13 @@ The GUI supports:
 
 The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, Windows 10 and the Windows 11 classic menu use registry-based entries, and GNOME Files uses Nautilus scripts.
 
+On Windows, the Explorer menu also supports a two-step link workflow: right-click a file or folder and choose `LinkForge > Pick Link Source`, then right-click a target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. The direct symlink and hard-link commands create the link without opening the full GUI. If a target name already exists, LinkForge asks whether to overwrite it, create an automatically renamed link, or cancel.
+
 For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
 
 ### Windows Explorer Context Menu
 
-Windows 11 top-level menu integration is implemented by `crates/linkforge-context-menu-windows`. The classic registry fallback appears under "Show more options" on Windows 11. LinkForge does not recommend globally restoring the legacy Windows context menu because that changes system-wide Explorer behavior.
+Windows 11 top-level menu integration is implemented by `crates/linkforge-context-menu-windows`. It supports selected files, selected directories, and directory-background targets. The classic registry fallback appears under "Show more options" on Windows 11. LinkForge does not recommend globally restoring the legacy Windows context menu because that changes system-wide Explorer behavior.
 
 ### GNOME Files Context Menu
 

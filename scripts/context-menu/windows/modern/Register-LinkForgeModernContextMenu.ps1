@@ -88,6 +88,9 @@ $manifest = @"
             <desktop5:ItemType Type="Directory">
               <desktop5:Verb Id="LinkForgeDirectories" Clsid="7D4D6E4B-2C72-4A54-9367-6D2F4A3D1C8E" />
             </desktop5:ItemType>
+            <desktop5:ItemType Type="Directory\Background">
+              <desktop5:Verb Id="LinkForgeDirectoryBackground" Clsid="7D4D6E4B-2C72-4A54-9367-6D2F4A3D1C8E" />
+            </desktop5:ItemType>
           </desktop4:FileExplorerContextMenus>
         </desktop4:Extension>
       </Extensions>

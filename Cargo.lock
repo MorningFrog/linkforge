@@ -1829,6 +1829,8 @@ version = "0.1.0"
 name = "linkforge-context-menu-windows"
 version = "0.1.0"
 dependencies = [
+ "linkforge-core",
+ "tempfile",
  "windows",
  "windows-core 0.61.2",
 ]
@@ -1852,6 +1854,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tempfile",
+ "windows",
 ]
 
 [[package]]
