@@ -1,10 +1,15 @@
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 const EXTENSION_FILE_NAME: &str = "linkforge.py";
+const DEFAULT_GUI_EXE: &str = "linkforge-gui";
 
 fn main() {
     if let Err(error) = run() {
@@ -14,30 +19,62 @@ fn main() {
 }
 
 fn run() -> io::Result<()> {
-    let mut args = env::args().skip(1);
+    match parse_args(env::args().skip(1))? {
+        CliCommand::Install {
+            gui_exe,
+            skip_gui_check,
+        } => install(&gui_exe, skip_gui_check),
+        CliCommand::Verify {
+            gui_exe,
+            skip_gui_check,
+        } => verify(&gui_exe, skip_gui_check),
+        CliCommand::Uninstall => uninstall(),
+        CliCommand::Help => {
+            print_help();
+            Ok(())
+        }
+    }
+}
+
+enum CliCommand {
+    Install {
+        gui_exe: String,
+        skip_gui_check: bool,
+    },
+    Verify {
+        gui_exe: String,
+        skip_gui_check: bool,
+    },
+    Uninstall,
+    Help,
+}
+
+fn parse_args(args: impl IntoIterator<Item = String>) -> io::Result<CliCommand> {
+    let mut args = args.into_iter();
     let command = args.next().unwrap_or_else(|| "help".to_string());
 
     match command.as_str() {
         "install" => {
-            let mut gui_exe = "linkforge-gui".to_string();
-            while let Some(arg) = args.next() {
-                if arg == "--gui-exe" {
-                    gui_exe = args.next().ok_or_else(|| {
-                        io::Error::new(io::ErrorKind::InvalidInput, "--gui-exe requires a value")
-                    })?;
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("unknown argument: {arg}"),
-                    ));
-                }
-            }
-            install(&gui_exe)
+            let options = parse_install_options(args)?;
+            Ok(CliCommand::Install {
+                gui_exe: options.gui_exe,
+                skip_gui_check: options.skip_gui_check,
+            })
         }
-        "uninstall" => uninstall(),
+        "verify" => {
+            let options = parse_install_options(args)?;
+            Ok(CliCommand::Verify {
+                gui_exe: options.gui_exe,
+                skip_gui_check: options.skip_gui_check,
+            })
+        }
+        "uninstall" => {
+            reject_extra_args(args)?;
+            Ok(CliCommand::Uninstall)
+        }
         "help" | "--help" | "-h" => {
-            print_help();
-            Ok(())
+            reject_extra_args(args)?;
+            Ok(CliCommand::Help)
         }
         other => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -46,8 +83,56 @@ fn run() -> io::Result<()> {
     }
 }
 
-fn install(gui_exe: &str) -> io::Result<()> {
+struct InstallOptions {
+    gui_exe: String,
+    skip_gui_check: bool,
+}
+
+fn parse_install_options(args: impl Iterator<Item = String>) -> io::Result<InstallOptions> {
+    let mut gui_exe = DEFAULT_GUI_EXE.to_string();
+    let mut skip_gui_check = false;
+    let mut args = args.peekable();
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--gui-exe" => {
+                gui_exe = args.next().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "--gui-exe requires a value")
+                })?;
+            }
+            "--skip-gui-check" => skip_gui_check = true,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("unknown argument: {arg}"),
+                ));
+            }
+        }
+    }
+
+    Ok(InstallOptions {
+        gui_exe,
+        skip_gui_check,
+    })
+}
+
+fn reject_extra_args(args: impl Iterator<Item = String>) -> io::Result<()> {
+    if let Some(arg) = args.into_iter().next() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("unknown argument: {arg}"),
+        ));
+    }
+    Ok(())
+}
+
+fn install(gui_exe: &str, skip_gui_check: bool) -> io::Result<()> {
+    println!("Checking nautilus-python...");
     ensure_nautilus_python_available()?;
+    println!("  ok");
+
+    let gui_check = check_gui_exe(gui_exe, skip_gui_check)?;
+    print_gui_check(&gui_check);
 
     let target_dir = nautilus_python_extension_dir()?;
     fs::create_dir_all(&target_dir)?;
@@ -55,28 +140,72 @@ fn install(gui_exe: &str) -> io::Result<()> {
     let path = target_dir.join(EXTENSION_FILE_NAME);
     fs::write(&path, extension_contents(gui_exe))?;
 
-    println!(
-        "Installed LinkForge GNOME Files extension to {}",
-        path.display()
-    );
-    println!("Restart GNOME Files with `nautilus -q` if the menu does not refresh.");
+    if !path.is_file() {
+        return Err(io::Error::other(format!(
+            "failed to install extension at {}",
+            path.display()
+        )));
+    }
+
+    println!("Installing extension... ok");
+    println!("Installed LinkForge GNOME Files extension:");
+    println!("  {}", path.display());
+    println!("Restart GNOME Files with:");
+    println!("  nautilus -q");
+    Ok(())
+}
+
+fn verify(gui_exe: &str, skip_gui_check: bool) -> io::Result<()> {
+    println!("Checking nautilus-python...");
+    ensure_nautilus_python_available()?;
+    println!("  ok");
+
+    let gui_check = check_gui_exe(gui_exe, skip_gui_check)?;
+    print_gui_check(&gui_check);
+
+    let path = nautilus_python_extension_path()?;
+    if !path.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "LinkForge GNOME Files extension is not installed at {}",
+                path.display()
+            ),
+        ));
+    }
+
+    let contents = fs::read_to_string(&path)?;
+    verify_extension_contents(&contents, gui_exe)?;
+
+    println!("Verified LinkForge GNOME Files extension:");
+    println!("  {}", path.display());
     Ok(())
 }
 
 fn uninstall() -> io::Result<()> {
     let path = nautilus_python_extension_path()?;
     if !path.exists() {
-        println!("No LinkForge GNOME Files extension found.");
+        println!(
+            "No LinkForge GNOME Files extension found at {}.",
+            path.display()
+        );
+        println!("Nothing to remove.");
         return Ok(());
     }
 
     fs::remove_file(&path)?;
 
-    println!(
-        "Removed LinkForge GNOME Files extension from {}",
-        path.display()
-    );
-    println!("Restart GNOME Files with `nautilus -q` if the menu does not refresh.");
+    if path.exists() {
+        return Err(io::Error::other(format!(
+            "failed to remove extension at {}",
+            path.display()
+        )));
+    }
+
+    println!("Removed LinkForge GNOME Files extension:");
+    println!("  {}", path.display());
+    println!("Restart GNOME Files with:");
+    println!("  nautilus -q");
     Ok(())
 }
 
@@ -101,19 +230,192 @@ fn home_dir() -> io::Result<PathBuf> {
 }
 
 fn ensure_nautilus_python_available() -> io::Result<()> {
-    let status = Command::new("python3")
-        .arg("-c")
-        .arg("import gi; gi.require_version('Nautilus', '4.0'); from gi.repository import Nautilus")
-        .status();
+    run_python_check("python3 is required", "print('ok')")?;
+    run_python_check(
+        "PyGObject is required: python3 cannot import gi",
+        "import gi",
+    )?;
+    run_python_check(
+        "Nautilus 4.0 introspection bindings are required",
+        "import gi; gi.require_version('Nautilus', '4.0')",
+    )?;
+    run_python_check(
+        "nautilus-python is required. Install your distribution's nautilus-python package, then rerun this command.",
+        "import gi; gi.require_version('Nautilus', '4.0'); from gi.repository import Nautilus",
+    )
+}
+
+fn run_python_check(error: &str, script: &str) -> io::Result<()> {
+    let status = Command::new("python3").arg("-c").arg(script).status();
 
     if matches!(status, Ok(status) if status.success()) {
         return Ok(());
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        "nautilus-python is required. Install your distribution's nautilus-python package, then rerun this command.",
-    ))
+    Err(io::Error::new(io::ErrorKind::NotFound, error))
+}
+
+struct GuiCheck {
+    configured: String,
+    resolved: Option<PathBuf>,
+    skipped: bool,
+}
+
+fn check_gui_exe(gui_exe: &str, skip_gui_check: bool) -> io::Result<GuiCheck> {
+    if gui_exe.trim().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--gui-exe must not be empty",
+        ));
+    }
+
+    if skip_gui_check {
+        return Ok(GuiCheck {
+            configured: gui_exe.to_string(),
+            resolved: None,
+            skipped: true,
+        });
+    }
+
+    let resolved = resolve_gui_exe(gui_exe)?;
+    Ok(GuiCheck {
+        configured: gui_exe.to_string(),
+        resolved: Some(resolved),
+        skipped: false,
+    })
+}
+
+fn print_gui_check(check: &GuiCheck) {
+    println!("Checking GUI executable...");
+    println!("  configured: {}", check.configured);
+    if check.skipped {
+        println!("  resolved: skipped by --skip-gui-check");
+    } else if let Some(resolved) = &check.resolved {
+        println!("  resolved: {}", resolved.display());
+    }
+}
+
+fn resolve_gui_exe(gui_exe: &str) -> io::Result<PathBuf> {
+    if looks_like_path(gui_exe) {
+        let path = PathBuf::from(gui_exe);
+        return validate_executable_file(&path, gui_exe);
+    }
+
+    find_executable_on_path(gui_exe).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("could not resolve GUI executable `{gui_exe}` on PATH"),
+        )
+    })
+}
+
+fn looks_like_path(value: &str) -> bool {
+    let path = Path::new(value);
+    path.is_absolute() || value.contains('/') || value.contains('\\')
+}
+
+fn validate_executable_file(path: &Path, display: &str) -> io::Result<PathBuf> {
+    if !path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("GUI executable does not exist: {display}"),
+        ));
+    }
+
+    if !path.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("GUI executable is not a file: {display}"),
+        ));
+    }
+
+    if !is_executable_file(path) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("GUI executable is not executable: {display}"),
+        ));
+    }
+
+    path.canonicalize()
+}
+
+fn find_executable_on_path(command: &str) -> Option<PathBuf> {
+    let path_var = env::var_os("PATH")?;
+    for dir in env::split_paths(&path_var) {
+        for candidate_name in executable_candidate_names(command) {
+            let candidate = dir.join(candidate_name);
+            if is_executable_file(&candidate) {
+                return candidate.canonicalize().ok().or(Some(candidate));
+            }
+        }
+    }
+    None
+}
+
+fn executable_candidate_names(command: &str) -> Vec<OsString> {
+    let command_path = Path::new(command);
+    if command_path.extension().is_some() {
+        return vec![OsString::from(command)];
+    }
+
+    let mut candidates = vec![OsString::from(command)];
+
+    #[cfg(windows)]
+    {
+        let extensions = env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+        for extension in extensions.to_string_lossy().split(';') {
+            if extension.is_empty() {
+                continue;
+            }
+            candidates.push(OsString::from(format!("{command}{extension}")));
+        }
+    }
+
+    candidates
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        path.metadata()
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn verify_extension_contents(contents: &str, gui_exe: &str) -> io::Result<()> {
+    if !contents.contains("class LinkForgeMenuProvider") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "extension does not contain LinkForgeMenuProvider",
+        ));
+    }
+
+    if !contents.contains("Nautilus.MenuProvider") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "extension does not contain Nautilus.MenuProvider",
+        ));
+    }
+
+    let configured_gui = python_string(gui_exe);
+    if !contents.contains(&configured_gui) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("extension does not contain configured GUI executable {configured_gui}"),
+        ));
+    }
+
+    Ok(())
 }
 
 fn extension_contents(gui_exe: &str) -> String {
@@ -292,7 +594,12 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
 
 fn print_help() {
     println!("Usage:");
-    println!("  linkforge-context-menu-gnome install [--gui-exe <path-or-command>]");
+    println!(
+        "  linkforge-context-menu-gnome install [--gui-exe <path-or-command>] [--skip-gui-check]"
+    );
+    println!(
+        "  linkforge-context-menu-gnome verify [--gui-exe <path-or-command>] [--skip-gui-check]"
+    );
     println!("  linkforge-context-menu-gnome uninstall");
 }
 
@@ -327,5 +634,72 @@ mod tests {
         let extension = extension_contents("linkforge-gui");
         assert!(!extension.contains("NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"));
         assert!(!extension.contains(".local/share/nautilus/scripts"));
+    }
+
+    #[test]
+    fn install_options_parse_gui_exe_and_skip_check() {
+        let command = parse_args([
+            "install".to_string(),
+            "--gui-exe".to_string(),
+            "/opt/linkforge/linkforge-gui".to_string(),
+            "--skip-gui-check".to_string(),
+        ])
+        .unwrap();
+
+        match command {
+            CliCommand::Install {
+                gui_exe,
+                skip_gui_check,
+            } => {
+                assert_eq!(gui_exe, "/opt/linkforge/linkforge-gui");
+                assert!(skip_gui_check);
+            }
+            _ => panic!("expected install command"),
+        }
+    }
+
+    #[test]
+    fn verify_options_default_to_linkforge_gui() {
+        let command = parse_args(["verify".to_string()]).unwrap();
+
+        match command {
+            CliCommand::Verify {
+                gui_exe,
+                skip_gui_check,
+            } => {
+                assert_eq!(gui_exe, DEFAULT_GUI_EXE);
+                assert!(!skip_gui_check);
+            }
+            _ => panic!("expected verify command"),
+        }
+    }
+
+    #[test]
+    fn skip_gui_check_does_not_resolve_gui() {
+        let check = check_gui_exe("definitely-not-installed-linkforge-gui", true).unwrap();
+        assert_eq!(check.configured, "definitely-not-installed-linkforge-gui");
+        assert!(check.skipped);
+        assert!(check.resolved.is_none());
+    }
+
+    #[test]
+    fn path_like_gui_exe_must_exist() {
+        let error = resolve_gui_exe("/definitely/missing/linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn command_gui_exe_must_be_on_path() {
+        let error = resolve_gui_exe("definitely-not-installed-linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn verify_extension_requires_markers_and_gui_exe() {
+        let extension = extension_contents("/opt/linkforge/linkforge-gui");
+        verify_extension_contents(&extension, "/opt/linkforge/linkforge-gui").unwrap();
+
+        let error = verify_extension_contents(&extension, "/other/linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }

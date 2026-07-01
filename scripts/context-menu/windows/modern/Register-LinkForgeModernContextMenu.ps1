@@ -1,10 +1,38 @@
 param(
-    [string] $GuiExePath = "target/debug/linkforge-gui.exe",
-    [string] $ShellExtDllPath = "target/x86_64-pc-windows-msvc/debug/linkforge_context_menu_windows.dll",
-    [string] $StagingDir = "target/linkforge-modern-context-menu"
+    [ValidateSet("Debug", "Release")]
+    [string] $Configuration = "Debug",
+    [string] $GuiExePath,
+    [string] $ShellExtDllPath,
+    [string] $StagingDir = "target/linkforge-modern-context-menu",
+    [switch] $VerifyOnly,
+    [switch] $SkipGuiCheck
 )
 
 $ErrorActionPreference = "Stop"
+
+$PackageName = "LinkForge.ContextMenu"
+$StagedGuiExeName = "linkforge-gui.exe"
+$StagedShellExtDllName = "linkforge_context_menu_windows.dll"
+
+function Get-ProfileName {
+    if ($Configuration -eq "Release") {
+        return "release"
+    }
+
+    return "debug"
+}
+
+function Get-BuildSuffix {
+    if ($Configuration -eq "Release") {
+        return " --release"
+    }
+
+    return ""
+}
+
+function Get-DefaultGuiExePath {
+    Join-Path (Join-Path "target" (Get-ProfileName)) $StagedGuiExeName
+}
 
 function Test-AppxSideLoadingEnabled {
     $key = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
@@ -15,6 +43,164 @@ function Test-AppxSideLoadingEnabled {
     $settings = Get-ItemProperty -LiteralPath $key
     return ($settings.AllowDevelopmentWithoutDevLicense -eq 1) -or ($settings.AllowAllTrustedApps -eq 1)
 }
+
+function Get-ArtifactHelp {
+    param(
+        [string] $Kind
+    )
+
+    $suffix = Get-BuildSuffix
+    if ($Kind -eq "GUI") {
+        return "Build it with: cargo build -p linkforge-gui$suffix"
+    }
+
+    return "Build it with: cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc$suffix"
+}
+
+function Resolve-Artifact {
+    param(
+        [string] $Path,
+        [string] $Kind,
+        [string] $ExpectedExtension,
+        [switch] $Minimal
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "$Kind path is empty."
+    }
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        $help = Get-ArtifactHelp -Kind $Kind
+        throw @"
+Missing $Kind artifact:
+  $Path
+
+$help
+"@
+    }
+
+    $resolved = Resolve-Path -LiteralPath $Path
+    $item = Get-Item -LiteralPath $resolved.Path
+
+    if ($Minimal) {
+        return $item.FullName
+    }
+
+    if ($item.Extension -ne $ExpectedExtension) {
+        throw "$Kind artifact must be a $ExpectedExtension file: $($item.FullName)"
+    }
+
+    if ($item.Length -le 0) {
+        throw "$Kind artifact is empty: $($item.FullName)"
+    }
+
+    return $item.FullName
+}
+
+function Get-StagingPath {
+    $resolvedStagingDir = $StagingDir
+    if ([System.IO.Path]::IsPathRooted($resolvedStagingDir)) {
+        return $resolvedStagingDir
+    }
+
+    return Join-Path (Get-Location) $resolvedStagingDir
+}
+
+function Assert-StagedFile {
+    param(
+        [string] $Path,
+        [string] $Kind,
+        [string] $ExpectedExtension,
+        [switch] $SkipStrictChecks
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Missing staged $Kind artifact: $Path"
+    }
+
+    if ($SkipStrictChecks) {
+        return
+    }
+
+    $item = Get-Item -LiteralPath $Path
+    if ($item.Extension -ne $ExpectedExtension) {
+        throw "Staged $Kind artifact must be a $ExpectedExtension file: $($item.FullName)"
+    }
+
+    if ($item.Length -le 0) {
+        throw "Staged $Kind artifact is empty: $($item.FullName)"
+    }
+}
+
+function Show-RegistrationFailureHint {
+    param(
+        [System.Management.Automation.ErrorRecord] $ErrorRecord
+    )
+
+    $message = $ErrorRecord.Exception.Message
+    if ($message -match "0x80073CFF") {
+        Write-Host "Hint: enable Developer Mode or app sideloading, then rerun this script."
+    } elseif ($message -match "0x80073D2E") {
+        Write-Host "Hint: sparse packages registered with -ExternalLocation require AllowExternalContent=true in the manifest."
+    } elseif ($message -match "0x80070057") {
+        Write-Host "Hint: ensure the manifest uses a concrete resource language such as en-us."
+    }
+}
+
+function Test-LinkForgeModernRegistration {
+    param(
+        [string] $Stage
+    )
+
+    $manifestPath = Join-Path $Stage "AppxManifest.xml"
+    $stagedGuiExe = Join-Path $Stage $StagedGuiExeName
+    $stagedShellExtDll = Join-Path $Stage $StagedShellExtDllName
+
+    Assert-StagedFile -Path $stagedGuiExe -Kind "GUI" -ExpectedExtension ".exe" -SkipStrictChecks:$SkipGuiCheck
+    Assert-StagedFile -Path $stagedShellExtDll -Kind "shell extension" -ExpectedExtension ".dll"
+
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Missing staged Appx manifest: $manifestPath"
+    }
+
+    $package = Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue
+    if ($null -eq $package) {
+        throw "LinkForge Windows 11 context menu package is not registered."
+    }
+
+    Write-Host "Verified LinkForge Windows 11 context menu package:"
+    Write-Host "  Name: $($package.Name)"
+    Write-Host "  Full name: $($package.PackageFullName)"
+    Write-Host "  Staging dir: $Stage"
+    Write-Host "  Manifest: $manifestPath"
+    Write-Host "  GUI: $stagedGuiExe"
+    Write-Host "  Shell extension: $stagedShellExtDll"
+}
+
+if ([string]::IsNullOrWhiteSpace($GuiExePath)) {
+    $GuiExePath = Get-DefaultGuiExePath
+}
+
+if ([string]::IsNullOrWhiteSpace($ShellExtDllPath)) {
+    $ShellExtDllPath = Join-Path (Join-Path (Join-Path "target" "x86_64-pc-windows-msvc") (Get-ProfileName)) $StagedShellExtDllName
+}
+
+$stage = Get-StagingPath
+
+if ($VerifyOnly) {
+    Test-LinkForgeModernRegistration -Stage $stage
+    exit 0
+}
+
+if ($SkipGuiCheck) {
+    Write-Host "Skipping strict GUI artifact checks because -SkipGuiCheck was provided."
+    $guiExe = Resolve-Artifact -Path $GuiExePath -Kind "GUI" -ExpectedExtension ".exe" -Minimal
+} else {
+    $guiExe = Resolve-Artifact -Path $GuiExePath -Kind "GUI" -ExpectedExtension ".exe"
+}
+
+$shellExtDll = Resolve-Artifact -Path $ShellExtDllPath -Kind "shell extension" -ExpectedExtension ".dll"
+$assets = Join-Path $stage "Assets"
 
 if (-not (Test-AppxSideLoadingEnabled)) {
     throw @"
@@ -27,16 +213,11 @@ Then rerun this script.
 "@
 }
 
-$guiExe = (Resolve-Path -LiteralPath $GuiExePath).Path
-$shellExtDll = (Resolve-Path -LiteralPath $ShellExtDllPath).Path
-$stage = Join-Path (Get-Location) $StagingDir
-$assets = Join-Path $stage "Assets"
-
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 New-Item -ItemType Directory -Path $assets -Force | Out-Null
 
-Copy-Item -LiteralPath $guiExe -Destination (Join-Path $stage "linkforge-gui.exe") -Force
-Copy-Item -LiteralPath $shellExtDll -Destination (Join-Path $stage "linkforge_context_menu_windows.dll") -Force
+Copy-Item -LiteralPath $guiExe -Destination (Join-Path $stage $StagedGuiExeName) -Force
+Copy-Item -LiteralPath $shellExtDll -Destination (Join-Path $stage $StagedShellExtDllName) -Force
 
 $logoBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAIAAADt2u7VAAAATUlEQVR4nO3OwQkAIBDAsI7sv2Y36QZBIoLzCwNzZpKZ6wN8lh6XHpcelyKXHpcelyKXHpcelyKXHpcelyKXHpcelyKXHpcelyKXHpfyALHCAhU8Lzv8AAAAAElFTkSuQmCC")
 [System.IO.File]::WriteAllBytes((Join-Path $assets "Logo44.png"), $logoBytes)
@@ -103,7 +284,27 @@ $manifest = @"
 $manifestPath = Join-Path $stage "AppxManifest.xml"
 Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
 
-Add-AppxPackage -Register $manifestPath -ExternalLocation $stage
+Assert-StagedFile -Path (Join-Path $stage $StagedGuiExeName) -Kind "GUI" -ExpectedExtension ".exe" -SkipStrictChecks:$SkipGuiCheck
+Assert-StagedFile -Path (Join-Path $stage $StagedShellExtDllName) -Kind "shell extension" -ExpectedExtension ".dll"
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "Failed to write Appx manifest: $manifestPath"
+}
+
+Write-Host "Prepared LinkForge Windows 11 context menu staging:"
+Write-Host "  Configuration: $Configuration"
+Write-Host "  Staging dir: $stage"
+Write-Host "  GUI: $(Join-Path $stage $StagedGuiExeName)"
+Write-Host "  Shell extension: $(Join-Path $stage $StagedShellExtDllName)"
+Write-Host "  Manifest: $manifestPath"
+
+try {
+    Add-AppxPackage -Register $manifestPath -ExternalLocation $stage
+} catch {
+    Show-RegistrationFailureHint -ErrorRecord $_
+    throw
+}
+
+Test-LinkForgeModernRegistration -Stage $stage
 
 Write-Host "Registered LinkForge Windows 11 context menu package from $stage"
 Write-Host "Open a new Explorer window and right-click a file or directory. Restart Explorer only if the menu does not refresh."

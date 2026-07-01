@@ -1161,8 +1161,11 @@ mod tests {
         let missing = temp.path().join("missing.txt");
         fs::create_dir(&target_dir).unwrap();
 
-        let preflight =
-            build_direct_drop_preflight(&[missing.clone()], &target_dir, DirectLinkKind::Symlink);
+        let preflight = build_direct_drop_preflight(
+            std::slice::from_ref(&missing),
+            &target_dir,
+            DirectLinkKind::Symlink,
+        );
 
         assert_eq!(preflight.problems.len(), 1);
         assert_eq!(
@@ -1200,8 +1203,11 @@ mod tests {
         fs::write(&source, "source").unwrap();
         fs::write(target_dir.join("same.txt"), "existing").unwrap();
 
-        let preflight =
-            build_direct_drop_preflight(&[source.clone()], &target_dir, DirectLinkKind::Hardlink);
+        let preflight = build_direct_drop_preflight(
+            std::slice::from_ref(&source),
+            &target_dir,
+            DirectLinkKind::Hardlink,
+        );
 
         assert!(preflight.problems.is_empty());
         assert_eq!(preflight.conflicts.len(), 1);

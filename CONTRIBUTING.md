@@ -64,6 +64,22 @@ powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Reg
 Start-Process explorer
 ```
 
+The registration script defaults to debug artifacts. Pass `-Configuration Release` after building release artifacts:
+
+```powershell
+cargo build -p linkforge-gui --release
+cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release
+powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -Configuration Release
+```
+
+Use `-GuiExePath` or `-ShellExtDllPath` to point at custom artifacts. The script validates that the GUI executable, shell-extension DLL, staged manifest, and sparse-package registration are present. To diagnose an existing registration without registering again:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -VerifyOnly
+```
+
+If you intentionally need to stage a GUI executable without strict GUI artifact checks, pass `-SkipGuiCheck`; the shell-extension DLL and registration are still verified.
+
 If a previous registration attempt appears stuck, stop it with `Ctrl+C` before rerunning the command.
 
 Explorer usually notices new per-user context-menu entries in newly opened windows. After changing the GUI, command extension, or sparse-package scripts, rebuild both crates, unregister/register the sparse package again, and test from a newly opened Explorer window so stale COM/DLL state is not reused. If the menu does not appear or old behavior persists, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell.
@@ -91,10 +107,12 @@ To locally test GNOME Files advanced context-menu extension installation:
 
 ```text
 cargo run -p linkforge-context-menu-gnome -- install
+cargo run -p linkforge-context-menu-gnome -- verify
 cargo run -p linkforge-context-menu-gnome -- uninstall
 ```
 
 Pass `--gui-exe /path/to/linkforge-gui` to `install` when `linkforge-gui` is not on `PATH`.
+Pass the same `--gui-exe` value to `verify` to check an existing installation against that configured GUI executable. The installer validates `python3`, PyGObject, Nautilus introspection bindings, `nautilus-python`, and that the configured GUI executable can be resolved without launching the GUI. Use `--skip-gui-check` only for packaging or special environments where the GUI path is expected to become valid later.
 
 The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautilus -q` after installing or uninstalling if the menu does not refresh.
 After installing, select exactly two files in GNOME Files to test `Compare Same File` from the LinkForge advanced menu.
