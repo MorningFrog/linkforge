@@ -29,6 +29,7 @@ pub fn create_symlink(
 ) -> io::Result<()> {
     let source = source.as_ref();
     let link = link.as_ref();
+    reject_same_path_entry(source, link)?;
     prepare_target(link, force)?;
 
     let source_meta = fs::metadata(source)?;
@@ -42,6 +43,7 @@ pub fn create_hard_link(
 ) -> io::Result<()> {
     let source = source.as_ref();
     let link = link.as_ref();
+    reject_same_path_entry(source, link)?;
     prepare_target(link, force)?;
     fs::hard_link(source, link)
 }
@@ -227,6 +229,51 @@ fn scan_hard_link_siblings(path: &Path, root: &Path) -> io::Result<Vec<PathBuf>>
 
     siblings.sort();
     Ok(siblings)
+}
+
+fn reject_same_path_entry(source: &Path, link: &Path) -> io::Result<()> {
+    if same_path_entry(source, link)? {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "source and target must be different paths",
+        ));
+    }
+
+    Ok(())
+}
+
+fn same_path_entry(left: &Path, right: &Path) -> io::Result<bool> {
+    let (Some(left_parent), Some(right_parent), Some(left_name), Some(right_name)) = (
+        left.parent(),
+        right.parent(),
+        left.file_name(),
+        right.file_name(),
+    ) else {
+        return Ok(false);
+    };
+
+    Ok(fs::canonicalize(canonical_parent(left_parent))?
+        == fs::canonicalize(canonical_parent(right_parent))?
+        && same_file_name(left_name, right_name))
+}
+
+fn canonical_parent(parent: &Path) -> &Path {
+    if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    }
+}
+
+#[cfg(windows)]
+fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    left.to_string_lossy()
+        .eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+#[cfg(not(windows))]
+fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    left == right
 }
 
 fn prepare_target(path: &Path, force: bool) -> io::Result<()> {
@@ -508,6 +555,32 @@ mod tests {
         create_hard_link(&source, &target, true).unwrap();
         assert!(is_same_file(&source, &target).unwrap());
         assert!(create_hard_link(&source, &directory, true).is_err());
+    }
+
+    #[test]
+    fn force_rejects_hard_link_to_same_path_without_removing_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.txt");
+        fs::write(&source, "source").unwrap();
+
+        let error = create_hard_link(&source, &source, true).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("different paths"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
+    }
+
+    #[test]
+    fn force_rejects_symlink_to_same_path_without_removing_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.txt");
+        fs::write(&source, "source").unwrap();
+
+        let error = create_symlink(&source, &source, true).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("different paths"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
     }
 
     #[test]

@@ -403,6 +403,44 @@ fn source_kind_label(metadata: &fs::Metadata) -> &'static str {
     }
 }
 
+fn same_path_entry(left: &Path, right: &Path) -> io::Result<bool> {
+    let (Some(left_parent), Some(right_parent), Some(left_name), Some(right_name)) = (
+        left.parent(),
+        right.parent(),
+        left.file_name(),
+        right.file_name(),
+    ) else {
+        return Ok(false);
+    };
+
+    Ok(fs::canonicalize(canonical_parent(left_parent))?
+        == fs::canonicalize(canonical_parent(right_parent))?
+        && same_file_name(left_name, right_name))
+}
+
+fn canonical_parent(parent: &Path) -> &Path {
+    if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    }
+}
+
+#[cfg(windows)]
+fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    left.to_string_lossy()
+        .eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+#[cfg(not(windows))]
+fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    left == right
+}
+
+fn same_path_entry_message() -> String {
+    "source and target must be different paths".to_string()
+}
+
 #[cfg(unix)]
 fn device_id(metadata: &fs::Metadata) -> Option<u64> {
     Some(metadata.dev())
@@ -456,10 +494,18 @@ fn build_direct_drop_preflight(
 
         let link = target_dir.join(file_name);
         if fs::symlink_metadata(&link).is_ok() {
+            let message = match same_path_entry(source, &link) {
+                Ok(true) => "The target is the picked source; overwrite would remove the source."
+                    .to_string(),
+                Ok(false) => "The target already exists.".to_string(),
+                Err(error) => format!(
+                    "The target already exists, but could not be compared with the source: {error}"
+                ),
+            };
             conflicts.push(DirectDropPreflightConflict {
                 source: source_text.clone(),
                 link: link.display().to_string(),
-                message: "The target already exists.".to_string(),
+                message,
             });
         }
 
@@ -752,13 +798,27 @@ fn create_direct_link_step_inner(
     let mut renamed = false;
 
     if fs::symlink_metadata(&link).is_ok() {
+        let same_entry = same_path_entry(source, &link).unwrap_or(false);
         match conflict_choice {
             None => {
                 return direct_step_result(
                     "needsConflict",
                     &source_text,
                     Some(&link),
-                    "The target already exists.".to_string(),
+                    if same_entry {
+                        "The target is the picked source; overwrite would remove the source."
+                            .to_string()
+                    } else {
+                        "The target already exists.".to_string()
+                    },
+                );
+            }
+            Some(ConflictChoice::Overwrite) if same_entry => {
+                return direct_step_result(
+                    "failed",
+                    &source_text,
+                    Some(&link),
+                    format!("{}: {}", source.display(), same_path_entry_message()),
                 );
             }
             Some(ConflictChoice::Overwrite) => force = true,
@@ -1225,6 +1285,25 @@ mod tests {
     }
 
     #[test]
+    fn direct_drop_preflight_reports_source_as_target_conflict() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("same.txt");
+        fs::write(&source, "source").unwrap();
+
+        let preflight = build_direct_drop_preflight(
+            std::slice::from_ref(&source),
+            temp.path(),
+            DirectLinkKind::Hardlink,
+        );
+
+        assert!(preflight.problems.is_empty());
+        assert_eq!(preflight.conflicts.len(), 1);
+        assert_eq!(preflight.conflicts[0].source, source.display().to_string());
+        assert_eq!(preflight.conflicts[0].link, source.display().to_string());
+        assert!(preflight.conflicts[0].message.contains("picked source"));
+    }
+
+    #[test]
     fn direct_drop_preflight_reports_source_without_file_name() {
         let temp = tempfile::tempdir().unwrap();
         let target_dir = temp.path().join("target");
@@ -1507,6 +1586,44 @@ mod tests {
             Some(ConflictChoice::Cancel),
         );
         assert_eq!(cancelled.status, "cancelled");
+    }
+
+    #[test]
+    fn direct_link_step_rejects_overwriting_source_in_place() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("same.txt");
+        fs::write(&source, "source").unwrap();
+
+        let result = create_direct_link_step_inner(
+            &source,
+            temp.path(),
+            DirectLinkKind::Hardlink,
+            Some(ConflictChoice::Overwrite),
+        );
+
+        assert_eq!(result.status, "failed");
+        assert!(result.message.contains("different paths"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
+    }
+
+    #[test]
+    fn direct_link_step_renames_source_in_own_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("same.txt");
+        let renamed = temp.path().join("same - Link.txt");
+        fs::write(&source, "source").unwrap();
+
+        let result = create_direct_link_step_inner(
+            &source,
+            temp.path(),
+            DirectLinkKind::Hardlink,
+            Some(ConflictChoice::Rename),
+        );
+
+        assert_eq!(result.status, "renamed");
+        assert_eq!(result.link, Some(renamed.display().to_string()));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
+        assert!(linkforge_core::is_same_file(&source, &renamed).unwrap());
     }
 
     #[test]
