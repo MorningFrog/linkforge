@@ -192,6 +192,24 @@
       <button data-menu-action="siblings">Siblings</button>
     </div>
 
+    <div id="modal-backdrop" class="modal-backdrop hidden" role="presentation">
+      <section id="modal-panel" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <header class="modal-header">
+          <h3 id="modal-title">LinkForge</h3>
+          <div class="modal-header-actions">
+            <button id="modal-open-full" type="button" class="secondary-button hidden">Open LinkForge</button>
+            <button id="modal-close" type="button" class="icon-button" title="Close">x</button>
+          </div>
+        </header>
+        <div id="modal-body" class="modal-body"></div>
+        <label id="modal-check-row" class="check-row hidden">
+          <input id="modal-check" type="checkbox" />
+          <span id="modal-check-label"></span>
+        </label>
+        <footer id="modal-actions" class="modal-actions"></footer>
+      </section>
+    </div>
+
     <script src="main.js"></script>
   </body>
 </html>

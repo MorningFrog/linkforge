@@ -4,7 +4,6 @@
   "description": "Default desktop permissions for LinkForge",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "dialog:default"
+    "core:default"
   ]
 }

@@ -67,7 +67,7 @@ The GUI supports:
 
 The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, and GNOME Files uses a `nautilus-python` extension.
 
-The file-manager menus also support a two-step link workflow: right-click one or more files or folders and choose `LinkForge > Pick Link Source`, then right-click a single target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. The direct symlink and hard-link commands create links without opening the full GUI. For picked directories, hard-link creation builds a directory tree whose regular files are hard links to the source files and whose symbolic links are copied as links. If a target name already exists, Windows asks whether to rename, overwrite, skip, or cancel, with an option to apply the choice to remaining conflicts; GNOME automatically chooses a renamed link.
+The file-manager menus also support a two-step link workflow: right-click one or more files or folders and choose `LinkForge > Pick Link Source`, then right-click a single target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. Drop actions start LinkForge hidden, perform clean batches silently, and only show a lightweight Tauri-rendered dialog when a conflict, error, skip, rename, cancellation, or failure needs attention. For picked directories, hard-link creation builds a directory tree whose regular files are hard links to the source files and whose symbolic links are copied as links. If a target name already exists, LinkForge asks whether to rename, overwrite, skip, or cancel in the lightweight dialog, with an option to apply the choice to remaining conflicts and a button to expand the current window into the full LinkForge interface.
 
 For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
 
@@ -84,7 +84,7 @@ Both integrations show `Compare Same File` when exactly two files are selected; 
 | Directory | `Pick Link Source`, `Create Symlink(s) from ...`, `Create Hard Link(s) from ...`, `Open Symlink in LinkForge...`, `Find Hard Link Siblings...`, `Scan Hard Link Groups`, `Clone Tree Preserving Hard Links...` | Same dynamic items under `LinkForge` |
 | Directory background | `Create Symlink from ...`, `Create Hard Link from ...` | Same dynamic items under `LinkForge` |
 
-Windows 11 modern can dynamically hide unsupported items and include the picked source name or source count in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. On GNOME, direct drop actions automatically choose a renamed link when the default target name already exists instead of showing the Windows conflict dialog.
+Windows 11 modern can dynamically hide unsupported items and include the picked source name or source count in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. Both integrations route drop conflicts, errors, and non-clean completion summaries through LinkForge's lightweight Tauri-rendered dialogs instead of platform-native message boxes; clean drop batches exit silently.
 
 ### Windows Explorer Context Menu
 

@@ -1,13 +1,14 @@
 const tauriApi = window.__TAURI__ || {};
 const invoke = tauriApi.core?.invoke;
-const dialogOpen = tauriApi.dialog?.open;
-const dialogSave = tauriApi.dialog?.save;
 
 const state = {
   mode: "symlink",
   results: [],
   contextPath: null,
   launch: null,
+  modalResolver: null,
+  dropMode: false,
+  fullWindowOpen: false,
 };
 
 const titles = {
@@ -58,6 +59,12 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+function clearElement(element) {
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
+  }
+}
+
 function inputValue(id) {
   return byId(id).value.trim();
 }
@@ -70,6 +77,43 @@ function setStatus(message, type = "idle") {
   const status = byId("status");
   status.textContent = message;
   status.className = `status ${type}`;
+}
+
+function isDropAction(action) {
+  return action === "drop-symlink" || action === "drop-hardlink";
+}
+
+function enterDropMode() {
+  state.dropMode = true;
+  state.fullWindowOpen = false;
+  document.body.classList.add("drop-mode");
+}
+
+async function showDropWindow() {
+  if (!state.dropMode || state.fullWindowOpen || !invoke) return;
+  await invoke("show_drop_window");
+}
+
+async function closeDropWindow() {
+  if (!invoke) return;
+  try {
+    await invoke("close_drop_window");
+  } catch (_) {
+    // The command can be interrupted by the window closing, which is the desired outcome.
+  }
+}
+
+async function expandToFullWindow() {
+  if (!state.dropMode || state.fullWindowOpen || !invoke) return;
+
+  await invoke("expand_to_full_window");
+  state.fullWindowOpen = true;
+  state.dropMode = false;
+  document.body.classList.remove("drop-mode");
+  switchView("quick");
+
+  const openFull = byId("modal-open-full");
+  openFull.classList.add("hidden");
 }
 
 function setResults(items) {
@@ -126,6 +170,131 @@ function displayError(error) {
   resultMessage(message);
 }
 
+function messageBlock(message) {
+  const block = document.createElement("div");
+  block.className = "modal-message";
+  block.textContent = message;
+  return block;
+}
+
+function closeModal(value) {
+  const resolver = state.modalResolver;
+  if (!resolver) return;
+
+  const backdrop = byId("modal-backdrop");
+  const check = byId("modal-check");
+  backdrop.classList.add("hidden");
+  state.modalResolver = null;
+  resolver({ value, checked: check.checked });
+}
+
+function openModal({
+  title,
+  content,
+  actions,
+  checkLabel = null,
+  defaultValue = "cancel",
+  tone = "",
+}) {
+  if (state.modalResolver) {
+    closeModal(defaultValue);
+  }
+
+  const backdrop = byId("modal-backdrop");
+  const modal = byId("modal-panel");
+  const titleEl = byId("modal-title");
+  const body = byId("modal-body");
+  const actionsEl = byId("modal-actions");
+  const checkRow = byId("modal-check-row");
+  const check = byId("modal-check");
+  const checkText = byId("modal-check-label");
+  const openFull = byId("modal-open-full");
+
+  titleEl.textContent = title;
+  modal.className = `modal ${tone}`.trim();
+  clearElement(body);
+  clearElement(actionsEl);
+
+  const nodes = Array.isArray(content) ? content : [content];
+  nodes.forEach((node) => {
+    if (typeof node === "string") {
+      body.append(messageBlock(node));
+    } else if (node) {
+      body.append(node);
+    }
+  });
+
+  check.checked = false;
+  checkText.textContent = checkLabel || "";
+  checkRow.classList.toggle("hidden", !checkLabel);
+  openFull.classList.toggle("hidden", !(state.dropMode && !state.fullWindowOpen));
+  openFull.onclick = async () => {
+    try {
+      await expandToFullWindow();
+    } catch (error) {
+      displayError(error);
+    }
+  };
+
+  actions.forEach((action) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = action.className || "secondary-button";
+    button.textContent = action.label;
+    button.addEventListener("click", () => closeModal(action.value));
+    actionsEl.append(button);
+  });
+
+  byId("modal-close").onclick = () => closeModal(defaultValue);
+  backdrop.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    state.modalResolver = resolve;
+  });
+}
+
+async function showMessageModal(title, message, tone = "") {
+  return openModal({
+    title,
+    content: messageBlock(message),
+    tone,
+    defaultValue: "close",
+    actions: [{ label: "Close", value: "close", className: "primary-button" }],
+  });
+}
+
+async function showConflictModal(path, allowApplyToRemaining) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "conflict-body";
+
+  const text = document.createElement("p");
+  text.textContent = "The target already exists.";
+  wrapper.append(text);
+
+  const code = document.createElement("code");
+  code.className = "path-code";
+  code.textContent = path;
+  wrapper.append(code);
+
+  const result = await openModal({
+    title: "Resolve Conflict",
+    content: wrapper,
+    checkLabel: allowApplyToRemaining ? "Apply this choice to remaining conflicts" : null,
+    defaultValue: "cancel",
+    actions: [
+      { label: "Rename", value: "rename", className: "primary-button" },
+      { label: "Overwrite", value: "overwrite", className: "secondary-button" },
+      { label: "Skip", value: "skip", className: "secondary-button" },
+      { label: "Cancel", value: "cancel", className: "ghost-button" },
+    ],
+  });
+
+  return {
+    choice: result.value || "cancel",
+    applyToRemaining: Boolean(result.checked && result.value !== "cancel"),
+  };
+}
+
 async function runCommand(name, args, onSuccess) {
   if (!requireTauri()) return;
   setStatus("Running...", "idle");
@@ -161,20 +330,295 @@ function applyQuickMode(mode) {
 }
 
 async function choosePath(target, options) {
-  if (!dialogOpen && !dialogSave) {
-    return;
+  const value = await showPathPicker(target, options);
+  if (value) {
+    setInput(target, value);
+  }
+}
+
+async function showPathPicker(target, options) {
+  if (!requireTauri()) return null;
+
+  let selectedPath = inputValue(target);
+  let currentListing = null;
+
+  const picker = document.createElement("div");
+  picker.className = "path-picker";
+
+  const fieldRow = document.createElement("div");
+  fieldRow.className = "field-row";
+
+  const pathInput = document.createElement("input");
+  pathInput.type = "text";
+  pathInput.autocomplete = "off";
+  pathInput.value = selectedPath;
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "secondary-button";
+  openButton.textContent = "Open";
+
+  const upButton = document.createElement("button");
+  upButton.type = "button";
+  upButton.className = "secondary-button";
+  upButton.textContent = "Up";
+
+  fieldRow.append(pathInput, openButton, upButton);
+
+  const list = document.createElement("div");
+  list.className = "picker-list";
+  picker.append(fieldRow, list);
+
+  function renderPickerMessage(message) {
+    clearElement(list);
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = message;
+    list.append(empty);
   }
 
-  const value = options.save
-    ? await dialogSave({ title: "Choose path" })
-    : await dialogOpen({
-        title: "Choose path",
-        directory: Boolean(options.directory),
-        multiple: false,
+  function renderListing(listing) {
+    currentListing = listing;
+    clearElement(list);
+    upButton.disabled = !listing.parent;
+
+    if (!selectedPath || options.directory) {
+      selectedPath = listing.current;
+      pathInput.value = listing.current;
+    }
+
+    if (!listing.entries.length) {
+      renderPickerMessage("No entries.");
+      return;
+    }
+
+    listing.entries.forEach((entry) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `picker-row ${entry.isDir ? "directory" : "file"}`;
+      row.dataset.path = entry.path;
+      row.dataset.dir = String(entry.isDir);
+
+      const name = document.createElement("span");
+      name.textContent = entry.name;
+      const kind = document.createElement("span");
+      kind.className = "picker-kind";
+      kind.textContent = entry.isDir ? "Folder" : "File";
+      row.append(name, kind);
+
+      row.addEventListener("click", async () => {
+        selectedPath = entry.path;
+        pathInput.value = entry.path;
+        if (entry.isDir) {
+          await loadDirectory(entry.path);
+        } else {
+          document.querySelectorAll(".picker-row").forEach((item) => {
+            item.classList.toggle("selected", item.dataset.path === entry.path);
+          });
+        }
       });
 
-  if (typeof value === "string") {
-    setInput(target, value);
+      list.append(row);
+    });
+  }
+
+  async function loadDirectory(path) {
+    renderPickerMessage("Loading...");
+    try {
+      const listing = await invoke("list_directory", { path: path || null });
+      renderListing(listing);
+    } catch (error) {
+      const message = error?.message || String(error);
+      setStatus(message, "error");
+      renderPickerMessage(message);
+    }
+  }
+
+  openButton.addEventListener("click", () => loadDirectory(pathInput.value.trim()));
+  upButton.addEventListener("click", () => {
+    if (currentListing?.parent) {
+      loadDirectory(currentListing.parent);
+    }
+  });
+  pathInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadDirectory(pathInput.value.trim());
+    }
+  });
+
+  const title = options.save
+    ? "Choose Path"
+    : options.directory
+      ? "Choose Directory"
+      : "Choose File";
+  const modal = openModal({
+    title,
+    content: picker,
+    defaultValue: "cancel",
+    actions: [
+      { label: "Choose", value: "choose", className: "primary-button" },
+      { label: "Cancel", value: "cancel", className: "ghost-button" },
+    ],
+  });
+
+  await loadDirectory(selectedPath);
+  const result = await modal;
+  if (result.value !== "choose") {
+    return null;
+  }
+
+  return pathInput.value.trim() || selectedPath || currentListing?.current || null;
+}
+
+function directKindFromAction(action) {
+  return action === "drop-hardlink" ? "hardlink" : "symlink";
+}
+
+function directKindNoun(kind) {
+  return kind === "hardlink" ? "hard link" : "symlink";
+}
+
+function createDirectSummary() {
+  return {
+    created: 0,
+    renamed: 0,
+    skipped: 0,
+    failed: 0,
+    cancelled: 0,
+    skippedDetails: [],
+    failedDetails: [],
+  };
+}
+
+function recordDirectStep(summary, result) {
+  if (result.status === "created") {
+    summary.created += 1;
+    return;
+  }
+  if (result.status === "renamed") {
+    summary.created += 1;
+    summary.renamed += 1;
+    return;
+  }
+  if (result.status === "skipped") {
+    summary.skipped += 1;
+    summary.skippedDetails.push(result.message);
+    return;
+  }
+  if (result.status === "failed") {
+    summary.failed += 1;
+    summary.failedDetails.push(result.message);
+    return;
+  }
+  if (result.status === "cancelled") {
+    summary.cancelled += 1;
+  }
+}
+
+function directSummaryMessage(summary, kind) {
+  const lines = [
+    `Batch ${directKindNoun(kind)} operation complete.`,
+    `Created: ${summary.created}`,
+    `Renamed: ${summary.renamed}`,
+    `Skipped: ${summary.skipped}`,
+    `Failed: ${summary.failed}`,
+    `Cancelled: ${summary.cancelled}`,
+  ];
+
+  if (summary.skippedDetails.length) {
+    lines.push("Skipped items:");
+    lines.push(...summary.skippedDetails);
+  }
+  if (summary.failedDetails.length) {
+    lines.push("Failed items:");
+    lines.push(...summary.failedDetails);
+  }
+
+  return lines.join("\n");
+}
+
+function isCleanDirectSummary(summary) {
+  return (
+    summary.created > 0 &&
+    summary.renamed === 0 &&
+    summary.skipped === 0 &&
+    summary.failed === 0 &&
+    summary.cancelled === 0
+  );
+}
+
+async function runDirectDrop(context) {
+  if (!requireTauri()) return;
+
+  const kind = directKindFromAction(context.action);
+  const summary = createDirectSummary();
+  let appliedChoice = null;
+
+  setResults([]);
+  setStatus("Preparing batch link operation...", "idle");
+
+  try {
+    const drop = await invoke("prepare_direct_drop", {
+      targets: context.paths || [],
+      backgroundTarget: Boolean(context.backgroundTarget),
+    });
+
+    byId("context-label").textContent =
+      `${context.action}: ${drop.sources.length} source(s) -> ${drop.targetDir}`;
+
+    for (let index = 0; index < drop.sources.length; index += 1) {
+      const source = drop.sources[index];
+      let result = await invoke("create_direct_link_step", {
+        source,
+        targetDir: drop.targetDir,
+        kind,
+        conflictChoice: appliedChoice,
+      });
+
+      if (result.status === "needsConflict") {
+        await showDropWindow();
+        const answer = await showConflictModal(result.link, index < drop.sources.length - 1);
+        if (answer.choice === "cancel") {
+          summary.cancelled += drop.sources.length - index;
+          break;
+        }
+        if (answer.applyToRemaining) {
+          appliedChoice = answer.choice;
+        }
+        result = await invoke("create_direct_link_step", {
+          source,
+          targetDir: drop.targetDir,
+          kind,
+          conflictChoice: answer.choice,
+        });
+      }
+
+      recordDirectStep(summary, result);
+      setStatus(`Processed ${index + 1} of ${drop.sources.length}.`, "idle");
+    }
+
+    const message = directSummaryMessage(summary, kind);
+    resultMessage(message);
+    setStatus("Done.", summary.failed ? "error" : "ok");
+    if (isCleanDirectSummary(summary) && !state.fullWindowOpen) {
+      await closeDropWindow();
+      return;
+    }
+
+    await showDropWindow();
+    await showMessageModal("Batch Complete", message, summary.failed ? "error" : "ok");
+    if (!state.fullWindowOpen) {
+      await closeDropWindow();
+    }
+  } catch (error) {
+    const message = error?.message || String(error);
+    displayError(error);
+    await showDropWindow();
+    await showMessageModal("LinkForge", message, "error");
+    if (!state.fullWindowOpen) {
+      await closeDropWindow();
+    }
   }
 }
 
@@ -291,6 +735,12 @@ async function loadInitialContext() {
       setInput("inspect-path", context.paths[0]);
       setInput("groups-root", context.paths[0]);
       setInput("clone-source", context.paths[0]);
+    }
+
+    if (isDropAction(context.action)) {
+      enterDropMode();
+      await runDirectDrop(context);
+      return;
     }
 
     if (context.action === "same-file") {

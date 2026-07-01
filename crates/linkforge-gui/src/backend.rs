@@ -6,24 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
-
-#[cfg(windows)]
-use windows::Win32::Foundation::HWND;
-#[cfg(windows)]
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-#[cfg(windows)]
-use windows::Win32::UI::Controls::{
-    TASKDIALOG_BUTTON, TASKDIALOGCONFIG, TDF_ALLOW_DIALOG_CANCELLATION,
-    TDF_POSITION_RELATIVE_TO_WINDOW, TDF_SIZE_TO_CONTENT, TDF_USE_COMMAND_LINKS,
-};
-#[cfg(windows)]
-use windows::Win32::UI::WindowsAndMessaging::{
-    IDCANCEL, IDNO, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK,
-    MB_SETFOREGROUND, MB_TASKMODAL, MB_TOPMOST, MB_YESNO, MB_YESNOCANCEL, MESSAGEBOX_RESULT,
-    MESSAGEBOX_STYLE, MessageBoxW,
-};
-#[cfg(windows)]
-use windows::core::{BOOL, HRESULT, PCSTR, PCWSTR};
+use tauri::{AppHandle, LogicalSize, Manager, WebviewWindow};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +54,38 @@ pub struct HardLinkGroupResult {
 #[serde(rename_all = "camelCase")]
 pub struct ScanGroupsResult {
     pub groups: Vec<HardLinkGroupResult>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectDropContext {
+    pub sources: Vec<String>,
+    pub target_dir: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectLinkStepResult {
+    pub status: String,
+    pub source: String,
+    pub link: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PathEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryListing {
+    pub current: String,
+    pub parent: Option<String>,
+    pub entries: Vec<PathEntry>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,6 +142,13 @@ impl LaunchContext {
             background_target,
         }
     }
+
+    pub fn is_drop_action(&self) -> bool {
+        matches!(
+            self.action.as_deref(),
+            Some("drop-symlink" | "drop-hardlink")
+        )
+    }
 }
 
 #[tauri::command]
@@ -134,28 +156,92 @@ pub fn initial_context(context: tauri::State<'_, LaunchContext>) -> LaunchContex
     context.inner().clone()
 }
 
+const DROP_WINDOW_WIDTH: f64 = 560.0;
+const DROP_WINDOW_HEIGHT: f64 = 360.0;
+const DROP_WINDOW_MIN_WIDTH: f64 = 520.0;
+const DROP_WINDOW_MIN_HEIGHT: f64 = 320.0;
+const FULL_WINDOW_WIDTH: f64 = 1080.0;
+const FULL_WINDOW_HEIGHT: f64 = 760.0;
+const FULL_WINDOW_MIN_WIDTH: f64 = 900.0;
+const FULL_WINDOW_MIN_HEIGHT: f64 = 620.0;
+
+pub fn configure_initial_window(app: &tauri::App) -> Result<(), String> {
+    let context = app.state::<LaunchContext>();
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window is not available".to_string())?;
+
+    if context.is_drop_action() {
+        configure_drop_window(&window)?;
+    } else {
+        configure_full_window(&window)?;
+        show_and_focus_window(&window)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn show_drop_window(window: WebviewWindow) -> Result<(), String> {
+    configure_drop_window(&window)?;
+    show_and_focus_window(&window)
+}
+
+#[tauri::command]
+pub fn close_drop_window(app: AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn expand_to_full_window(window: WebviewWindow) -> Result<(), String> {
+    configure_full_window(&window)?;
+    show_and_focus_window(&window)
+}
+
+fn configure_drop_window(window: &WebviewWindow) -> Result<(), String> {
+    window
+        .set_title("LinkForge")
+        .map_err(|error| error.to_string())?;
+    window
+        .set_min_size(Some(LogicalSize::new(
+            DROP_WINDOW_MIN_WIDTH,
+            DROP_WINDOW_MIN_HEIGHT,
+        )))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_size(LogicalSize::new(DROP_WINDOW_WIDTH, DROP_WINDOW_HEIGHT))
+        .map_err(|error| error.to_string())?;
+    window.center().map_err(|error| error.to_string())
+}
+
+fn configure_full_window(window: &WebviewWindow) -> Result<(), String> {
+    window
+        .set_title("LinkForge")
+        .map_err(|error| error.to_string())?;
+    window
+        .set_min_size(Some(LogicalSize::new(
+            FULL_WINDOW_MIN_WIDTH,
+            FULL_WINDOW_MIN_HEIGHT,
+        )))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_size(LogicalSize::new(FULL_WINDOW_WIDTH, FULL_WINDOW_HEIGHT))
+        .map_err(|error| error.to_string())?;
+    window.center().map_err(|error| error.to_string())
+}
+
+fn show_and_focus_window(window: &WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
 pub fn handle_direct_context_action(context: &LaunchContext) -> bool {
     match context.action.as_deref() {
         Some("pick-source") => {
             if let Err(error) = pick_sources(&context.paths) {
-                show_error(&format!("Failed to pick link source:\n{error}"));
+                eprintln!("Failed to pick link source:\n{error}");
             }
-            true
-        }
-        Some("drop-symlink") => {
-            invoke_drop_link(
-                &context.paths,
-                DirectLinkKind::Symlink,
-                context.background_target,
-            );
-            true
-        }
-        Some("drop-hardlink") => {
-            invoke_drop_link(
-                &context.paths,
-                DirectLinkKind::Hardlink,
-                context.background_target,
-            );
             true
         }
         _ => false,
@@ -169,10 +255,30 @@ enum DirectLinkKind {
 }
 
 impl DirectLinkKind {
-    fn noun(self) -> &'static str {
+    fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "symlink" | "drop-symlink" => Some(Self::Symlink),
+            "hardlink" | "drop-hardlink" => Some(Self::Hardlink),
+            _ => None,
+        }
+    }
+
+    fn created_message(self, source: &Path, link: &Path) -> String {
         match self {
-            Self::Symlink => "symlink",
-            Self::Hardlink => "hard link",
+            Self::Symlink => {
+                format!(
+                    "Created symbolic link: {} -> {}",
+                    link.display(),
+                    source.display()
+                )
+            }
+            Self::Hardlink => {
+                format!(
+                    "Created hard link: {} -> {}",
+                    link.display(),
+                    source.display()
+                )
+            }
         }
     }
 }
@@ -185,172 +291,16 @@ enum ConflictChoice {
     Cancel,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ConflictAnswer {
-    choice: ConflictChoice,
-    apply_to_remaining: bool,
-}
-
-#[derive(Default)]
-struct ConflictResolver {
-    applied_choice: Option<ConflictChoice>,
-}
-
-impl ConflictResolver {
-    fn resolve(&mut self, path: &Path, allow_apply_to_remaining: bool) -> ConflictChoice {
-        if let Some(choice) = self.applied_choice {
-            return choice;
-        }
-
-        let answer = ask_conflict(path, allow_apply_to_remaining);
-        if answer.apply_to_remaining && !matches!(answer.choice, ConflictChoice::Cancel) {
-            self.applied_choice = Some(answer.choice);
-        }
-        answer.choice
-    }
-
-    #[cfg(test)]
-    fn with_applied(choice: ConflictChoice) -> Self {
-        Self {
-            applied_choice: Some(choice),
+impl ConflictChoice {
+    fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "overwrite" => Some(Self::Overwrite),
+            "rename" => Some(Self::Rename),
+            "skip" => Some(Self::Skip),
+            "cancel" => Some(Self::Cancel),
+            _ => None,
         }
     }
-}
-
-#[derive(Default, Debug, PartialEq, Eq)]
-struct BatchLinkSummary {
-    created: usize,
-    renamed: usize,
-    skipped: usize,
-    failed: usize,
-    cancelled: usize,
-    skipped_details: Vec<String>,
-    failed_details: Vec<String>,
-}
-
-impl BatchLinkSummary {
-    fn message(&self, kind: DirectLinkKind) -> String {
-        let mut lines = vec![
-            format!("Batch {} operation complete.", kind.noun()),
-            format!("Created: {}", self.created),
-            format!("Renamed: {}", self.renamed),
-            format!("Skipped: {}", self.skipped),
-            format!("Failed: {}", self.failed),
-            format!("Cancelled: {}", self.cancelled),
-        ];
-
-        if !self.skipped_details.is_empty() {
-            lines.push("Skipped items:".to_string());
-            lines.extend(self.skipped_details.iter().cloned());
-        }
-        if !self.failed_details.is_empty() {
-            lines.push("Failed items:".to_string());
-            lines.extend(self.failed_details.iter().cloned());
-        }
-
-        lines.join("\n")
-    }
-}
-
-fn invoke_drop_link(targets: &[String], kind: DirectLinkKind, background_target: bool) {
-    match drop_links(targets, kind, background_target) {
-        Ok(summary) => show_info(&summary.message(kind)),
-        Err(error) => show_error(&format!("Failed to create link:\n{error}")),
-    }
-}
-
-fn drop_links(
-    targets: &[String],
-    kind: DirectLinkKind,
-    background_target: bool,
-) -> io::Result<BatchLinkSummary> {
-    let sources = picked_sources();
-    if sources.is_empty() {
-        return Err(io::Error::new(
-            ErrorKind::NotFound,
-            "no link source has been picked",
-        ));
-    };
-
-    let Some(target_dir) = direct_link_target_dir(targets, background_target) else {
-        return Err(io::Error::new(
-            ErrorKind::InvalidInput,
-            format!(
-                "select a target directory or right-click a directory background. Received target paths: {}. Current directory: {}",
-                describe_targets(targets),
-                describe_current_dir()
-            ),
-        ));
-    };
-
-    let mut resolver = ConflictResolver::default();
-    Ok(create_batch_links(
-        &sources,
-        &target_dir,
-        kind,
-        &mut resolver,
-    ))
-}
-
-fn create_batch_links(
-    sources: &[PathBuf],
-    target_dir: &Path,
-    kind: DirectLinkKind,
-    resolver: &mut ConflictResolver,
-) -> BatchLinkSummary {
-    let mut summary = BatchLinkSummary::default();
-
-    for (index, source) in sources.iter().enumerate() {
-        let Some(file_name) = source.file_name() else {
-            summary.skipped += 1;
-            summary
-                .skipped_details
-                .push(format!("{}: source has no file name", source.display()));
-            continue;
-        };
-
-        let mut link = target_dir.join(file_name);
-        let mut force = false;
-        let mut renamed = false;
-
-        if fs::symlink_metadata(&link).is_ok() {
-            match resolver.resolve(&link, sources.len() > 1) {
-                ConflictChoice::Overwrite => force = true,
-                ConflictChoice::Rename => {
-                    link = available_link_path(target_dir, Path::new(file_name));
-                    renamed = true;
-                }
-                ConflictChoice::Skip => {
-                    summary.skipped += 1;
-                    summary
-                        .skipped_details
-                        .push(format!("{}: target already exists", link.display()));
-                    continue;
-                }
-                ConflictChoice::Cancel => {
-                    summary.cancelled += sources.len() - index;
-                    break;
-                }
-            }
-        }
-
-        match create_one_link(source, &link, kind, force).map_err(link_error) {
-            Ok(()) => {
-                summary.created += 1;
-                if renamed {
-                    summary.renamed += 1;
-                }
-            }
-            Err(error) => {
-                summary.failed += 1;
-                summary
-                    .failed_details
-                    .push(format!("{}: {error}", source.display()));
-            }
-        }
-    }
-
-    summary
 }
 
 fn create_one_link(
@@ -532,211 +482,222 @@ fn available_link_path(target_dir: &Path, source_name: &Path) -> PathBuf {
     unreachable!("unbounded rename search should always return a candidate")
 }
 
-#[cfg(windows)]
-fn ask_conflict(path: &Path, allow_apply_to_remaining: bool) -> ConflictAnswer {
-    const RENAME_BUTTON: i32 = 1001;
-    const OVERWRITE_BUTTON: i32 = 1002;
-    const SKIP_BUTTON: i32 = 1003;
-    const CANCEL_BUTTON: i32 = 1004;
-
-    let title = wide_null("LinkForge");
-    let instruction = wide_null("The target already exists.");
-    let content = wide_null(&path.display().to_string());
-    let rename = wide_null("Rename\nCreate an automatically renamed link.");
-    let overwrite = wide_null("Overwrite\nReplace the existing file or symbolic link.");
-    let skip = wide_null("Skip\nDo not create this link.");
-    let cancel = wide_null("Cancel\nStop the remaining batch operation.");
-    let verification = wide_null("Apply this choice to remaining conflicts");
-
-    let buttons = [
-        TASKDIALOG_BUTTON {
-            nButtonID: RENAME_BUTTON,
-            pszButtonText: PCWSTR(rename.as_ptr()),
-        },
-        TASKDIALOG_BUTTON {
-            nButtonID: OVERWRITE_BUTTON,
-            pszButtonText: PCWSTR(overwrite.as_ptr()),
-        },
-        TASKDIALOG_BUTTON {
-            nButtonID: SKIP_BUTTON,
-            pszButtonText: PCWSTR(skip.as_ptr()),
-        },
-        TASKDIALOG_BUTTON {
-            nButtonID: CANCEL_BUTTON,
-            pszButtonText: PCWSTR(cancel.as_ptr()),
-        },
-    ];
-
-    let mut config = TASKDIALOGCONFIG::default();
-    config.cbSize = std::mem::size_of::<TASKDIALOGCONFIG>() as u32;
-    config.hwndParent = HWND::default();
-    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION
-        | TDF_USE_COMMAND_LINKS
-        | TDF_SIZE_TO_CONTENT
-        | TDF_POSITION_RELATIVE_TO_WINDOW;
-    config.pszWindowTitle = PCWSTR(title.as_ptr());
-    config.pszMainInstruction = PCWSTR(instruction.as_ptr());
-    config.pszContent = PCWSTR(content.as_ptr());
-    config.cButtons = buttons.len() as u32;
-    config.pButtons = buttons.as_ptr();
-    config.nDefaultButton = RENAME_BUTTON;
-    if allow_apply_to_remaining {
-        config.pszVerificationText = PCWSTR(verification.as_ptr());
-    }
-
-    let mut button = 0;
-    let mut verification_checked = BOOL(0);
-    if !run_task_dialog_indirect(&config, &mut button, &mut verification_checked) {
-        return ask_conflict_with_message_box(path, allow_apply_to_remaining);
-    }
-
-    let choice = match button {
-        OVERWRITE_BUTTON => ConflictChoice::Overwrite,
-        SKIP_BUTTON => ConflictChoice::Skip,
-        CANCEL_BUTTON => ConflictChoice::Cancel,
-        _ => ConflictChoice::Rename,
+#[tauri::command]
+pub fn prepare_direct_drop(
+    targets: Vec<String>,
+    background_target: bool,
+) -> GuiResult<DirectDropContext> {
+    let sources = picked_sources();
+    if sources.is_empty() {
+        return Err(gui_error(io::Error::new(
+            ErrorKind::NotFound,
+            "no link source has been picked",
+        )));
     };
 
-    ConflictAnswer {
-        choice,
-        apply_to_remaining: verification_checked.as_bool(),
-    }
-}
-
-#[cfg(windows)]
-fn ask_conflict_with_message_box(path: &Path, allow_apply_to_remaining: bool) -> ConflictAnswer {
-    let first_prompt = format!(
-        "The target already exists:\n{}\n\nChoose Yes to create an automatically renamed link.\nChoose No for overwrite or skip options.\nChoose Cancel to stop this operation.",
-        path.display()
-    );
-    let first = message_box(
-        &first_prompt,
-        "LinkForge",
-        MB_YESNOCANCEL | MB_ICONINFORMATION,
-    );
-
-    let choice = if first == IDNO {
-        let second = ask_overwrite_or_skip_with_message_box(path);
-        conflict_choice_from_message_box_results(first, Some(second))
-    } else {
-        conflict_choice_from_message_box_results(first, None)
+    let Some(target_dir) = direct_link_target_dir(&targets, background_target) else {
+        return Err(gui_error(io::Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "select a target directory or right-click a directory background. Received target paths: {}. Current directory: {}",
+                describe_targets(&targets),
+                describe_current_dir()
+            ),
+        )));
     };
 
-    let apply_to_remaining = allow_apply_to_remaining
-        && !matches!(choice, ConflictChoice::Cancel)
-        && ask_apply_to_remaining_with_message_box();
-
-    ConflictAnswer {
-        choice,
-        apply_to_remaining,
-    }
+    Ok(DirectDropContext {
+        sources: paths_to_strings(sources),
+        target_dir: target_dir.display().to_string(),
+    })
 }
 
-#[cfg(windows)]
-fn ask_overwrite_or_skip_with_message_box(path: &Path) -> MESSAGEBOX_RESULT {
-    let prompt = format!(
-        "The target already exists:\n{}\n\nChoose Yes to overwrite the existing file or symbolic link.\nChoose No to skip this source.\nChoose Cancel to stop this operation.",
-        path.display()
-    );
-    message_box(&prompt, "LinkForge", MB_YESNOCANCEL | MB_ICONINFORMATION)
+#[tauri::command]
+pub fn create_direct_link_step(
+    source: String,
+    target_dir: String,
+    kind: String,
+    conflict_choice: Option<String>,
+) -> GuiResult<DirectLinkStepResult> {
+    let kind = DirectLinkKind::from_str(&kind).ok_or_else(|| {
+        gui_error(io::Error::new(
+            ErrorKind::InvalidInput,
+            format!("unsupported link kind: {kind}"),
+        ))
+    })?;
+    let conflict_choice = conflict_choice
+        .as_deref()
+        .map(|value| {
+            ConflictChoice::from_str(value).ok_or_else(|| {
+                gui_error(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("unsupported conflict choice: {value}"),
+                ))
+            })
+        })
+        .transpose()?;
+
+    Ok(create_direct_link_step_inner(
+        Path::new(&source),
+        Path::new(&target_dir),
+        kind,
+        conflict_choice,
+    ))
 }
 
-#[cfg(windows)]
-fn conflict_choice_from_message_box_results(
-    first: MESSAGEBOX_RESULT,
-    second: Option<MESSAGEBOX_RESULT>,
-) -> ConflictChoice {
-    if first == IDYES {
-        ConflictChoice::Rename
-    } else if first == IDNO && second == Some(IDYES) {
-        ConflictChoice::Overwrite
-    } else if first == IDNO && second == Some(IDNO) {
-        ConflictChoice::Skip
-    } else {
-        ConflictChoice::Cancel
-    }
-}
-
-#[cfg(windows)]
-fn ask_apply_to_remaining_with_message_box() -> bool {
-    let result = message_box(
-        "Apply this conflict choice to remaining conflicts in this batch?",
-        "LinkForge",
-        MB_YESNO | MB_ICONQUESTION,
-    );
-    result == IDYES
-}
-
-#[cfg(windows)]
-type TaskDialogIndirectProc =
-    unsafe extern "system" fn(*const TASKDIALOGCONFIG, *mut i32, *mut i32, *mut BOOL) -> HRESULT;
-
-#[cfg(windows)]
-fn run_task_dialog_indirect(
-    config: &TASKDIALOGCONFIG,
-    button: &mut i32,
-    verification_checked: &mut BOOL,
-) -> bool {
-    let dll_name = wide_null("comctl32.dll");
-    let Ok(module) = (unsafe { LoadLibraryW(PCWSTR(dll_name.as_ptr())) }) else {
-        return false;
-    };
-    let Some(proc) = (unsafe { GetProcAddress(module, PCSTR(b"TaskDialogIndirect\0".as_ptr())) })
-    else {
-        return false;
-    };
-    let task_dialog: TaskDialogIndirectProc = unsafe { std::mem::transmute(proc) };
-    let mut radio_button = 0;
-    let result = unsafe { task_dialog(config, button, &mut radio_button, verification_checked) };
-    result.is_ok()
-}
-
-#[cfg(not(windows))]
-fn ask_conflict(_path: &Path, allow_apply_to_remaining: bool) -> ConflictAnswer {
-    ConflictAnswer {
-        choice: ConflictChoice::Rename,
-        apply_to_remaining: allow_apply_to_remaining,
-    }
-}
-
-#[cfg(windows)]
-fn show_info(message: &str) {
-    message_box(message, "LinkForge", MB_OK | MB_ICONINFORMATION);
-}
-
-#[cfg(not(windows))]
-fn show_info(message: &str) {
-    eprintln!("{message}");
-}
-
-#[cfg(windows)]
-fn show_error(message: &str) {
-    message_box(message, "LinkForge", MB_OK | MB_ICONERROR);
-}
-
-#[cfg(not(windows))]
-fn show_error(message: &str) {
-    eprintln!("{message}");
-}
-
-#[cfg(windows)]
-fn message_box(message: &str, title: &str, style: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
-    let message = wide_null(message);
-    let title = wide_null(title);
-    let style = MESSAGEBOX_STYLE(style.0 | MB_SETFOREGROUND.0 | MB_TOPMOST.0 | MB_TASKMODAL.0);
-    unsafe {
-        MessageBoxW(
+fn create_direct_link_step_inner(
+    source: &Path,
+    target_dir: &Path,
+    kind: DirectLinkKind,
+    conflict_choice: Option<ConflictChoice>,
+) -> DirectLinkStepResult {
+    let source_text = source.display().to_string();
+    let Some(file_name) = source.file_name() else {
+        return direct_step_result(
+            "skipped",
+            &source_text,
             None,
-            PCWSTR(message.as_ptr()),
-            PCWSTR(title.as_ptr()),
-            style,
-        )
+            format!("{}: source has no file name", source.display()),
+        );
+    };
+
+    let mut link = target_dir.join(file_name);
+    let mut force = false;
+    let mut renamed = false;
+
+    if fs::symlink_metadata(&link).is_ok() {
+        match conflict_choice {
+            None => {
+                return direct_step_result(
+                    "needsConflict",
+                    &source_text,
+                    Some(&link),
+                    "The target already exists.".to_string(),
+                );
+            }
+            Some(ConflictChoice::Overwrite) => force = true,
+            Some(ConflictChoice::Rename) => {
+                link = available_link_path(target_dir, Path::new(file_name));
+                renamed = true;
+            }
+            Some(ConflictChoice::Skip) => {
+                return direct_step_result(
+                    "skipped",
+                    &source_text,
+                    Some(&link),
+                    format!("{}: target already exists", link.display()),
+                );
+            }
+            Some(ConflictChoice::Cancel) => {
+                return direct_step_result(
+                    "cancelled",
+                    &source_text,
+                    Some(&link),
+                    "Operation cancelled.".to_string(),
+                );
+            }
+        }
+    }
+
+    match create_one_link(source, &link, kind, force).map_err(link_error) {
+        Ok(()) => direct_step_result(
+            if renamed { "renamed" } else { "created" },
+            &source_text,
+            Some(&link),
+            kind.created_message(source, &link),
+        ),
+        Err(error) => direct_step_result(
+            "failed",
+            &source_text,
+            Some(&link),
+            format!("{}: {error}", source.display()),
+        ),
     }
 }
 
-#[cfg(windows)]
-fn wide_null(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
+fn direct_step_result(
+    status: &str,
+    source: &str,
+    link: Option<&Path>,
+    message: String,
+) -> DirectLinkStepResult {
+    DirectLinkStepResult {
+        status: status.to_string(),
+        source: source.to_string(),
+        link: link.map(|path| path.display().to_string()),
+        message,
+    }
+}
+
+#[tauri::command]
+pub fn list_directory(path: Option<String>) -> GuiResult<DirectoryListing> {
+    let directory = directory_for_listing(path.as_deref().map(PathBuf::from))?;
+    let mut entries = Vec::new();
+
+    for entry in fs::read_dir(&directory).map_err(gui_error)? {
+        let entry = entry.map_err(gui_error)?;
+        let file_type = entry.file_type().map_err(gui_error)?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        entries.push(PathEntry {
+            name,
+            path: entry.path().display().to_string(),
+            is_dir: file_type.is_dir(),
+        });
+    }
+
+    entries.sort_by(|left, right| {
+        right
+            .is_dir
+            .cmp(&left.is_dir)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+
+    Ok(DirectoryListing {
+        parent: directory.parent().map(|path| path.display().to_string()),
+        current: directory.display().to_string(),
+        entries,
+    })
+}
+
+fn directory_for_listing(path: Option<PathBuf>) -> GuiResult<PathBuf> {
+    let path = path.unwrap_or_else(default_start_dir);
+    if path.is_dir() {
+        return Ok(path);
+    }
+    if path.is_file()
+        && let Some(parent) = path.parent()
+        && parent.is_dir()
+    {
+        return Ok(parent.to_path_buf());
+    }
+    if !path.exists()
+        && let Some(parent) = path.parent()
+        && parent.is_dir()
+    {
+        return Ok(parent.to_path_buf());
+    }
+
+    Err(gui_error(io::Error::new(
+        ErrorKind::NotFound,
+        format!("directory not found: {}", path.display()),
+    )))
+}
+
+fn default_start_dir() -> PathBuf {
+    env::current_dir()
+        .ok()
+        .filter(|path| path.is_dir())
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .filter(|path| path.is_dir())
+        })
+        .or_else(|| {
+            env::var_os("USERPROFILE")
+                .map(PathBuf::from)
+                .filter(|path| path.is_dir())
+        })
+        .unwrap_or_else(env::temp_dir)
 }
 
 #[tauri::command]
@@ -1088,7 +1049,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_hardlink_creates_files_and_directory_trees() {
+    fn direct_link_step_creates_files_and_directory_trees() {
         let temp = tempfile::tempdir().unwrap();
         let target_dir = temp.path().join("target");
         let file_source = temp.path().join("file.txt");
@@ -1100,16 +1061,21 @@ mod tests {
         fs::create_dir(&nested).unwrap();
         fs::write(nested.join("nested.txt"), "nested").unwrap();
 
-        let mut resolver = ConflictResolver::default();
-        let summary = create_batch_links(
-            &[file_source.clone(), tree_source.clone()],
+        let file_result = create_direct_link_step_inner(
+            &file_source,
             &target_dir,
             DirectLinkKind::Hardlink,
-            &mut resolver,
+            None,
+        );
+        let tree_result = create_direct_link_step_inner(
+            &tree_source,
+            &target_dir,
+            DirectLinkKind::Hardlink,
+            None,
         );
 
-        assert_eq!(summary.created, 2);
-        assert_eq!(summary.failed, 0);
+        assert_eq!(file_result.status, "created");
+        assert_eq!(tree_result.status, "created");
         assert!(linkforge_core::is_same_file(&file_source, target_dir.join("file.txt")).unwrap());
         assert!(
             linkforge_core::is_same_file(
@@ -1121,7 +1087,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_symlink_creates_multiple_links_when_supported() {
+    fn direct_link_step_creates_symlinks_when_supported() {
         let temp = tempfile::tempdir().unwrap();
         let target_dir = temp.path().join("target");
         let first = temp.path().join("first.txt");
@@ -1130,25 +1096,22 @@ mod tests {
         fs::write(&first, "first").unwrap();
         fs::write(&second, "second").unwrap();
 
-        let mut resolver = ConflictResolver::default();
-        let summary = create_batch_links(
-            &[first.clone(), second.clone()],
-            &target_dir,
-            DirectLinkKind::Symlink,
-            &mut resolver,
-        );
+        let first_result =
+            create_direct_link_step_inner(&first, &target_dir, DirectLinkKind::Symlink, None);
+        let second_result =
+            create_direct_link_step_inner(&second, &target_dir, DirectLinkKind::Symlink, None);
 
-        if summary.failed > 0 && cfg!(windows) {
-            assert!(
-                summary
-                    .failed_details
-                    .iter()
-                    .any(|detail| detail.contains("symbolic links on Windows requires"))
-            );
+        let results = [&first_result, &second_result];
+        if results.iter().any(|result| result.status == "failed") && cfg!(windows) {
+            assert!(results.iter().any(|result| {
+                result
+                    .message
+                    .contains("symbolic links on Windows requires")
+            }));
             return;
         }
 
-        assert_eq!(summary.created, 2);
+        assert!(results.iter().all(|result| result.status == "created"));
         assert_eq!(
             fs::read_to_string(target_dir.join("first.txt")).unwrap(),
             "first"
@@ -1160,7 +1123,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_conflicts_can_rename_skip_or_cancel() {
+    fn direct_link_step_reports_and_applies_conflict_choices() {
         let temp = tempfile::tempdir().unwrap();
         let first_dir = temp.path().join("first");
         let second_dir = temp.path().join("second");
@@ -1174,68 +1137,52 @@ mod tests {
         fs::write(&second, "second").unwrap();
         fs::write(target_dir.join("same.txt"), "existing").unwrap();
 
-        let mut rename = ConflictResolver::with_applied(ConflictChoice::Rename);
-        let summary = create_batch_links(
-            &[first.clone(), second.clone()],
+        let needs_choice =
+            create_direct_link_step_inner(&first, &target_dir, DirectLinkKind::Hardlink, None);
+        assert_eq!(needs_choice.status, "needsConflict");
+        assert_eq!(
+            needs_choice.link,
+            Some(target_dir.join("same.txt").display().to_string())
+        );
+
+        let first_rename = create_direct_link_step_inner(
+            &first,
             &target_dir,
             DirectLinkKind::Hardlink,
-            &mut rename,
+            Some(ConflictChoice::Rename),
         );
-        assert_eq!(summary.created, 2);
-        assert_eq!(summary.renamed, 2);
+        let second_rename = create_direct_link_step_inner(
+            &second,
+            &target_dir,
+            DirectLinkKind::Hardlink,
+            Some(ConflictChoice::Rename),
+        );
+        assert_eq!(first_rename.status, "renamed");
+        assert_eq!(second_rename.status, "renamed");
         assert!(target_dir.join("same - Link.txt").exists());
         assert!(target_dir.join("same - Link (2).txt").exists());
 
         let skip_target = temp.path().join("skip-target");
         fs::create_dir(&skip_target).unwrap();
         fs::write(skip_target.join("same.txt"), "existing").unwrap();
-        let mut skip = ConflictResolver::with_applied(ConflictChoice::Skip);
-        let summary = create_batch_links(
-            &[first.clone()],
+        let skipped = create_direct_link_step_inner(
+            &first,
             &skip_target,
             DirectLinkKind::Hardlink,
-            &mut skip,
+            Some(ConflictChoice::Skip),
         );
-        assert_eq!(summary.created, 0);
-        assert_eq!(summary.skipped, 1);
+        assert_eq!(skipped.status, "skipped");
 
         let cancel_target = temp.path().join("cancel-target");
         fs::create_dir(&cancel_target).unwrap();
         fs::write(cancel_target.join("same.txt"), "existing").unwrap();
-        let mut cancel = ConflictResolver::with_applied(ConflictChoice::Cancel);
-        let summary = create_batch_links(
-            &[first, second],
+        let cancelled = create_direct_link_step_inner(
+            &first,
             &cancel_target,
             DirectLinkKind::Hardlink,
-            &mut cancel,
+            Some(ConflictChoice::Cancel),
         );
-        assert_eq!(summary.created, 0);
-        assert_eq!(summary.cancelled, 2);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn conflict_message_box_fallback_maps_button_results() {
-        assert_eq!(
-            conflict_choice_from_message_box_results(IDYES, None),
-            ConflictChoice::Rename
-        );
-        assert_eq!(
-            conflict_choice_from_message_box_results(IDNO, Some(IDYES)),
-            ConflictChoice::Overwrite
-        );
-        assert_eq!(
-            conflict_choice_from_message_box_results(IDNO, Some(IDNO)),
-            ConflictChoice::Skip
-        );
-        assert_eq!(
-            conflict_choice_from_message_box_results(IDCANCEL, None),
-            ConflictChoice::Cancel
-        );
-        assert_eq!(
-            conflict_choice_from_message_box_results(IDNO, Some(IDCANCEL)),
-            ConflictChoice::Cancel
-        );
+        assert_eq!(cancelled.status, "cancelled");
     }
 
     #[test]

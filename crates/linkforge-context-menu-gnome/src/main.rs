@@ -198,8 +198,11 @@ def _first_name(paths):
     return os.path.basename(paths[0]) if paths else None
 
 
-def _run_action(action, paths):
-    command = [GUI_EXE, "--context-action", action, "--paths"]
+def _run_action(action, paths, background=False):
+    command = [GUI_EXE, "--context-action", action]
+    if background:
+        command.append("--context-background")
+    command.append("--paths")
     command.extend(paths)
     subprocess.Popen(
         command,
@@ -257,9 +260,9 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
             return []
 
         items = [
-            self._action_item("drop-symlink-background", _picked_source_label("Symlink", picked), "drop-symlink", [path])
+            self._action_item("drop-symlink-background", _picked_source_label("Symlink", picked), "drop-symlink", [path], True)
         ]
-        items.append(self._action_item("drop-hardlink-background", _picked_source_label("Hard Link", picked), "drop-hardlink", [path]))
+        items.append(self._action_item("drop-hardlink-background", _picked_source_label("Hard Link", picked), "drop-hardlink", [path], True))
         return [self._root_item(items)]
 
     def _root_item(self, items):
@@ -274,17 +277,17 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         root.set_submenu(submenu)
         return root
 
-    def _action_item(self, name, label, action, paths):
+    def _action_item(self, name, label, action, paths, background=False):
         item = Nautilus.MenuItem(
             name=f"LinkForge::{name}",
             label=label,
             tip="Open LinkForge",
         )
-        item.connect("activate", self._activate, action, paths)
+        item.connect("activate", self._activate, action, paths, background)
         return item
 
-    def _activate(self, _menu, action, paths):
-        _run_action(action, paths)
+    def _activate(self, _menu, action, paths, background):
+        _run_action(action, paths, background)
 "#;
 
 fn print_help() {
@@ -316,6 +319,7 @@ mod tests {
         assert!(extension.contains("same-file"));
         assert!(extension.contains("Compare Same File"));
         assert!(extension.contains("drop-symlink"));
+        assert!(extension.contains("--context-background"));
     }
 
     #[test]

@@ -46,7 +46,7 @@ The shared context-menu launch protocol is:
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while Windows drop actions use small dialogs for conflicts, errors, and completion before exiting without opening the Tauri window.
+Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations.
 
 ### Context Menu Integration
 
@@ -66,7 +66,7 @@ Start-Process explorer
 
 If a previous registration attempt appears stuck, stop it with `Ctrl+C` before rerunning the command.
 
-Explorer usually notices new per-user context-menu entries in newly opened windows. If the menu does not appear, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell.
+Explorer usually notices new per-user context-menu entries in newly opened windows. After changing the GUI, command extension, or sparse-package scripts, rebuild both crates, unregister/register the sparse package again, and test from a newly opened Explorer window so stale COM/DLL state is not reused. If the menu does not appear or old behavior persists, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell.
 
 If registration fails with `0x80073D2E`, check that the generated manifest contains `<uap10:AllowExternalContent>true</uap10:AllowExternalContent>`. Sparse packages registered with `-ExternalLocation` must explicitly allow external content.
 
@@ -76,7 +76,7 @@ If registration fails with `0x80070057` and says `x-generate` is not a valid lan
 
 Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Select exactly two files to test `Compare Same File`. Select multiple files or folders to test `Pick N Link Sources`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to confirm `LinkForge` expands with `Create Symlink from ...` and `Create Hard Link from ...` instead of an empty submenu.
 
-For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. If a target name already exists, test that the conflict dialog appears in front of Explorer and supports rename, overwrite, skip, cancel, and applying one choice to remaining conflicts. After the batch completes, confirm the summary dialog is also brought to the foreground.
+For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. A clean drop should create the links and exit without showing any LinkForge window. If a target name already exists, test that only the lightweight Tauri-rendered conflict dialog appears, without the full LinkForge shell, and that it supports rename, overwrite, skip, cancel, applying one choice to remaining conflicts, and `Open LinkForge`. After a non-clean batch, confirm the lightweight summary dialog appears; after clicking `Open LinkForge`, confirm the same window expands into the full LinkForge interface instead of launching a second process.
 
 Remove the Windows 11 top-level context-menu entries after testing:
 
@@ -98,7 +98,7 @@ Pass `--gui-exe /path/to/linkforge-gui` to `install` when `linkforge-gui` is not
 
 The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautilus -q` after installing or uninstalling if the menu does not refresh.
 After installing, select exactly two files in GNOME Files to test `Compare Same File` from the LinkForge advanced menu.
-Also test selecting multiple files or folders, choosing `Pick N Link Sources`, and dropping them into one target folder with `Create Symlink...` or `Create Hard Link...`. GNOME direct drops automatically rename conflicting targets.
+Also test selecting multiple files or folders, choosing `Pick N Link Sources`, and dropping them into one target folder with `Create Symlink...` or `Create Hard Link...`. Clean drops should exit silently. If a target name already exists or a non-clean result occurs, confirm the lightweight Tauri-rendered dialog matches the Windows flow.
 
 The compatibility wrappers under `scripts/context-menu/gnome` delegate to the GNOME context-menu crate:
 

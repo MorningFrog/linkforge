@@ -6,10 +6,11 @@
 - Added Windows Explorer and GNOME Files context-menu launch helpers for GUI quick actions.
 - Added a Windows 11 Explorer command extension registration path for top-level context-menu integration.
 - Added a GNOME Files advanced menu extension through `nautilus-python`.
-- Added a two-step Windows Explorer workflow for picking a link source and directly creating symlinks or hard links in a target folder without opening the full GUI.
+- Added a two-step Windows Explorer workflow for picking a link source and creating symlinks or hard links in a target folder through the GUI.
 - Added Windows Explorer and GNOME Files two-file context-menu comparison through `Compare Same File`.
 - Added multi-source file-manager picking and batch symlink/hard-link creation, including hard-link directory trees for picked folders.
-- Fixed Windows 11 Explorer batch link drops so directory-background menus show drop actions, conflicts always ask before renaming when dialogs are available, and completion summaries are brought to the foreground.
+- Changed file-manager drops to start LinkForge hidden, exit silently on clean success, and show lightweight Tauri-rendered dialogs only for conflicts, errors, and non-clean summaries instead of platform-native message boxes or the full main window.
+- Fixed Windows 11 Explorer batch link drops so directory-background menus show drop actions and conflicts ask before renaming.
 - Added dedicated workspace crates for Windows and GNOME context-menu integration.
 - Added CLI help descriptions and shell completion generation for PowerShell, Bash, Zsh, and Fish.
 - Added Windows symbolic link creation support that requests unprivileged symlink creation when Developer Mode is enabled.

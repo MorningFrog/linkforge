@@ -23,3 +23,4 @@
 - [x] Keep Windows and GNOME context-menu integrations in dedicated crates.
 - [x] Support richer multi-select file-manager workflows, including direct two-file same-file compare from the shell menu.
 - [x] Support multi-source file-manager pick and batch symlink/hard-link creation workflows.
+- [x] Render file-manager drop conflicts, errors, and non-clean summaries in lightweight Tauri dialogs instead of using platform-native message boxes or opening the full app by default.
