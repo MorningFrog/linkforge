@@ -10,6 +10,8 @@
 - Added Windows Explorer and GNOME Files two-file context-menu comparison through `Compare Same File`.
 - Added multi-source file-manager picking and batch symlink/hard-link creation, including hard-link directory trees for picked folders.
 - Changed file-manager drops to start LinkForge hidden, exit silently on clean success, and show lightweight Tauri-rendered dialogs only for conflicts, errors, and non-clean summaries instead of platform-native message boxes or the full main window.
+- Changed direct file-manager same-file and link-count actions to use lightweight Tauri-rendered result dialogs instead of opening the full LinkForge window.
+- Fixed file-manager source-picking failures so missing paths and state-file write errors appear in a lightweight Tauri-rendered dialog while successful picks remain silent.
 - Fixed Windows 11 Explorer batch link drops so directory-background menus show drop actions and conflicts ask before renaming.
 - Added dedicated workspace crates for Windows and GNOME context-menu integration.
 - Added CLI help descriptions and shell completion generation for PowerShell, Bash, Zsh, and Fish.

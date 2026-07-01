@@ -2,10 +2,10 @@
 
 ## P0: Context Menu UX
 
-- [ ] Reduce full-GUI launches from file-manager context-menu actions.
+- [x] Reduce full-GUI launches from file-manager context-menu actions.
   - Only open the full LinkForge window when the action genuinely needs the full interface.
   - For actions that can complete directly, show only a lightweight success, conflict, error, or summary dialog when user feedback is needed.
-- [ ] Show a lightweight failure dialog when `pick-source` fails.
+- [x] Show a lightweight failure dialog when `pick-source` fails.
   - Keep successful source picking silent.
   - Surface state-file write failures, missing source paths, and other pick errors through the same lightweight Tauri dialog style used by drop actions.
 

@@ -143,10 +143,10 @@ impl LaunchContext {
         }
     }
 
-    pub fn is_drop_action(&self) -> bool {
+    pub fn is_lightweight_action(&self) -> bool {
         matches!(
             self.action.as_deref(),
-            Some("drop-symlink" | "drop-hardlink")
+            Some("drop-symlink" | "drop-hardlink" | "pick-source" | "same-file" | "link-count")
         )
     }
 }
@@ -171,7 +171,7 @@ pub fn configure_initial_window(app: &tauri::App) -> Result<(), String> {
         .get_webview_window("main")
         .ok_or_else(|| "main window is not available".to_string())?;
 
-    if context.is_drop_action() {
+    if context.is_lightweight_action() {
         configure_drop_window(&window)?;
     } else {
         configure_full_window(&window)?;
@@ -234,18 +234,6 @@ fn configure_full_window(window: &WebviewWindow) -> Result<(), String> {
 fn show_and_focus_window(window: &WebviewWindow) -> Result<(), String> {
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())
-}
-
-pub fn handle_direct_context_action(context: &LaunchContext) -> bool {
-    match context.action.as_deref() {
-        Some("pick-source") => {
-            if let Err(error) = pick_sources(&context.paths) {
-                eprintln!("Failed to pick link source:\n{error}");
-            }
-            true
-        }
-        _ => false,
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -377,6 +365,15 @@ fn pick_sources(paths: &[String]) -> io::Result<()> {
         ));
     }
 
+    for path in paths {
+        if !Path::new(path).exists() {
+            return Err(io::Error::new(
+                ErrorKind::NotFound,
+                format!("source path not found: {path}"),
+            ));
+        }
+    }
+
     pick_sources_at(
         paths,
         &picked_sources_state_path(),
@@ -396,6 +393,14 @@ fn pick_sources_at(paths: &[String], state_path: &Path, legacy_path: &Path) -> i
         fs::create_dir_all(parent)?;
     }
     fs::write(legacy_path, paths[0].as_str())
+}
+
+#[tauri::command]
+pub fn pick_context_sources(paths: Vec<String>) -> GuiResult<OperationResult> {
+    pick_sources(&paths).map_err(gui_error)?;
+    Ok(OperationResult {
+        message: format!("Picked {} source(s).", paths.len()),
+    })
 }
 
 fn picked_sources() -> Vec<PathBuf> {
@@ -903,6 +908,63 @@ mod tests {
         assert_eq!(context.action.as_deref(), Some("drop-symlink"));
         assert!(context.background_target);
         assert_eq!(context.paths, ["%V"]);
+    }
+
+    #[test]
+    fn classifies_lightweight_context_actions() {
+        for action in [
+            "drop-symlink",
+            "drop-hardlink",
+            "pick-source",
+            "same-file",
+            "link-count",
+        ] {
+            let context = LaunchContext::from_args([
+                "--context-action".to_string(),
+                action.to_string(),
+                "--paths".to_string(),
+                "one.txt".to_string(),
+            ]);
+            assert!(
+                context.is_lightweight_action(),
+                "{action} should be lightweight"
+            );
+        }
+
+        for action in [
+            "symlink",
+            "hardlink",
+            "siblings",
+            "scan-groups",
+            "clone-tree",
+        ] {
+            let context = LaunchContext::from_args([
+                "--context-action".to_string(),
+                action.to_string(),
+                "--paths".to_string(),
+                "one.txt".to_string(),
+            ]);
+            assert!(
+                !context.is_lightweight_action(),
+                "{action} should open the full window"
+            );
+        }
+    }
+
+    #[test]
+    fn pick_sources_rejects_empty_paths() {
+        let error = pick_sources(&[]).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn pick_sources_rejects_missing_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("missing.txt");
+        let error = pick_sources(&[missing.display().to_string()]).unwrap_err();
+
+        assert_eq!(error.kind(), ErrorKind::NotFound);
     }
 
     #[test]

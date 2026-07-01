@@ -7,7 +7,7 @@ const state = {
   contextPath: null,
   launch: null,
   modalResolver: null,
-  dropMode: false,
+  lightweightMode: false,
   fullWindowOpen: false,
 };
 
@@ -83,18 +83,28 @@ function isDropAction(action) {
   return action === "drop-symlink" || action === "drop-hardlink";
 }
 
-function enterDropMode() {
-  state.dropMode = true;
+function isLightweightAction(action) {
+  return (
+    action === "drop-symlink" ||
+    action === "drop-hardlink" ||
+    action === "pick-source" ||
+    action === "same-file" ||
+    action === "link-count"
+  );
+}
+
+function enterLightweightMode() {
+  state.lightweightMode = true;
   state.fullWindowOpen = false;
   document.body.classList.add("drop-mode");
 }
 
-async function showDropWindow() {
-  if (!state.dropMode || state.fullWindowOpen || !invoke) return;
+async function showLightweightWindow() {
+  if (!state.lightweightMode || state.fullWindowOpen || !invoke) return;
   await invoke("show_drop_window");
 }
 
-async function closeDropWindow() {
+async function closeLightweightWindow() {
   if (!invoke) return;
   try {
     await invoke("close_drop_window");
@@ -104,11 +114,11 @@ async function closeDropWindow() {
 }
 
 async function expandToFullWindow() {
-  if (!state.dropMode || state.fullWindowOpen || !invoke) return;
+  if (!state.lightweightMode || state.fullWindowOpen || !invoke) return;
 
   await invoke("expand_to_full_window");
   state.fullWindowOpen = true;
-  state.dropMode = false;
+  state.lightweightMode = false;
   document.body.classList.remove("drop-mode");
   switchView("quick");
 
@@ -227,7 +237,7 @@ function openModal({
   check.checked = false;
   checkText.textContent = checkLabel || "";
   checkRow.classList.toggle("hidden", !checkLabel);
-  openFull.classList.toggle("hidden", !(state.dropMode && !state.fullWindowOpen));
+  openFull.classList.toggle("hidden", !(state.lightweightMode && !state.fullWindowOpen));
   openFull.onclick = async () => {
     try {
       await expandToFullWindow();
@@ -577,7 +587,7 @@ async function runDirectDrop(context) {
       });
 
       if (result.status === "needsConflict") {
-        await showDropWindow();
+        await showLightweightWindow();
         const answer = await showConflictModal(result.link, index < drop.sources.length - 1);
         if (answer.choice === "cancel") {
           summary.cancelled += drop.sources.length - index;
@@ -602,23 +612,83 @@ async function runDirectDrop(context) {
     resultMessage(message);
     setStatus("Done.", summary.failed ? "error" : "ok");
     if (isCleanDirectSummary(summary) && !state.fullWindowOpen) {
-      await closeDropWindow();
+      await closeLightweightWindow();
       return;
     }
 
-    await showDropWindow();
+    await showLightweightWindow();
     await showMessageModal("Batch Complete", message, summary.failed ? "error" : "ok");
     if (!state.fullWindowOpen) {
-      await closeDropWindow();
+      await closeLightweightWindow();
     }
   } catch (error) {
     const message = error?.message || String(error);
     displayError(error);
-    await showDropWindow();
+    await showLightweightWindow();
     await showMessageModal("LinkForge", message, "error");
     if (!state.fullWindowOpen) {
-      await closeDropWindow();
+      await closeLightweightWindow();
     }
+  }
+}
+
+async function finishLightweightWithModal(title, message, tone = "") {
+  resultMessage(message);
+  setStatus(tone === "error" ? message : "Done.", tone === "error" ? "error" : "ok");
+  await showLightweightWindow();
+  await showMessageModal(title, message, tone);
+  if (!state.fullWindowOpen) {
+    await closeLightweightWindow();
+  }
+}
+
+async function runPickSource(context) {
+  if (!requireTauri()) return;
+
+  try {
+    await invoke("pick_context_sources", { paths: context.paths || [] });
+    if (!state.fullWindowOpen) {
+      await closeLightweightWindow();
+    }
+  } catch (error) {
+    const message = error?.message || String(error);
+    displayError(error);
+    await finishLightweightWithModal("Pick Link Source Failed", message, "error");
+  }
+}
+
+async function runLightweightSameFile(context) {
+  if (!requireTauri()) return;
+
+  try {
+    if (context.paths?.length !== 2) {
+      throw new Error("Same-file context action requires exactly two paths.");
+    }
+    const result = await invoke("same_file", {
+      pathA: context.paths[0],
+      pathB: context.paths[1],
+    });
+    await finishLightweightWithModal("Same File", result.message, result.same ? "ok" : "");
+  } catch (error) {
+    const message = error?.message || String(error);
+    displayError(error);
+    await finishLightweightWithModal("Same File Failed", message, "error");
+  }
+}
+
+async function runLightweightLinkCount(context) {
+  if (!requireTauri()) return;
+
+  try {
+    if (context.paths?.length !== 1) {
+      throw new Error("Link-count context action requires exactly one path.");
+    }
+    const result = await invoke("link_count", { path: context.paths[0] });
+    await finishLightweightWithModal("Link Count", result.message, "ok");
+  } catch (error) {
+    const message = error?.message || String(error);
+    displayError(error);
+    await finishLightweightWithModal("Link Count Failed", message, "error");
   }
 }
 
@@ -737,21 +807,27 @@ async function loadInitialContext() {
       setInput("clone-source", context.paths[0]);
     }
 
+    if (isLightweightAction(context.action)) {
+      enterLightweightMode();
+    }
+
     if (isDropAction(context.action)) {
-      enterDropMode();
       await runDirectDrop(context);
       return;
     }
 
+    if (context.action === "pick-source") {
+      await runPickSource(context);
+      return;
+    }
+
     if (context.action === "same-file") {
-      switchView("inspect");
-      if (context.paths?.length === 2) {
-        setInput("same-a", context.paths[0]);
-        setInput("same-b", context.paths[1]);
-        await runSameFileComparison(context.paths[0], context.paths[1]);
-      } else {
-        displayError(new Error("Same-file context action requires exactly two paths."));
-      }
+      await runLightweightSameFile(context);
+      return;
+    }
+
+    if (context.action === "link-count") {
+      await runLightweightLinkCount(context);
       return;
     }
 

@@ -8,14 +8,14 @@ AI agents should choose which project documents to read based on the specific ta
 
 - For tasks involving project positioning, feature scope, usage notes, or platform support, read `README.md` first.
 - For tasks involving contribution workflow, commit conventions, or generating a git commit message, read `CONTRIBUTING.md` first.
-- For tasks involving TODO items, release notes, or project collaboration conventions, read related documents such as `TODO.md`, `CHANGLOG.md`, and `AGENTS.md` as needed.
+- For tasks involving TODO items, release notes, or project collaboration conventions, read related documents such as `TODO.md`, `CHANGELOG.md`, and `AGENTS.md` as needed.
 
 ## Documentation Sync
 
 After changing code, AI agents should check whether related documentation needs to be updated. Pay particular attention to:
 
 - `README.md`: Whether features, platform support, usage, or project structure changed.
-- `CHANGLOG.md`: Whether user-visible changes should be recorded.
+- `CHANGELOG.md`: Whether user-visible changes should be recorded.
 - `TODO.md`: Whether completed, postponed, or newly added tasks should be synchronized.
 - `AGENTS.md`: Whether AI collaboration workflow, conventions, or project guidance changed.
 - `CONTRIBUTING.md`: Whether contribution workflow, commit conventions, or development conventions changed.

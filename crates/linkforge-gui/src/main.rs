@@ -4,9 +4,6 @@ mod backend;
 
 fn main() {
     let launch_context = backend::LaunchContext::from_env();
-    if backend::handle_direct_context_action(&launch_context) {
-        return;
-    }
 
     tauri::Builder::default()
         .manage(launch_context)
@@ -19,6 +16,7 @@ fn main() {
             backend::show_drop_window,
             backend::close_drop_window,
             backend::expand_to_full_window,
+            backend::pick_context_sources,
             backend::prepare_direct_drop,
             backend::create_direct_link_step,
             backend::list_directory,
