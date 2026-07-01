@@ -20,11 +20,11 @@
 
 ## P1: GUI Behavior Consistency
 
-- [ ] Make GUI hard-link behavior match context-menu hard-link behavior for directories.
+- [x] Make GUI hard-link behavior match context-menu hard-link behavior for directories.
   - File sources should create hard links.
   - Directory sources should create hard-link directory trees, with regular files hard-linked and symbolic links copied as links.
   - Update GUI labels and result messages so users can distinguish file hard links from hard-link trees.
-- [ ] Replace the custom GUI path picker with system file and directory dialogs.
+- [x] Replace the custom GUI path picker with system file and directory dialogs.
   - Use native file/directory selection through Tauri.
   - Do not keep a custom fallback picker.
   - Support both source selection and destination selection workflows through system dialogs.
@@ -33,7 +33,6 @@
 
 - [ ] Make Windows context-menu registration scripts more robust.
   - Validate that required GUI and shell-extension build artifacts exist before registration.
-  - Print actionable build commands when artifacts are missing.
   - Support debug and release artifact paths clearly.
   - Improve verification after sparse-package registration.
 - [ ] Make GNOME Files extension installation more robust.

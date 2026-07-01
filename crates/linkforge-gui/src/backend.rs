@@ -101,22 +101,6 @@ pub struct DirectLinkStepResult {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PathEntry {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirectoryListing {
-    pub current: String,
-    pub parent: Option<String>,
-    pub entries: Vec<PathEntry>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GuiError {
     pub message: String,
     pub kind: String,
@@ -287,14 +271,24 @@ impl DirectLinkKind {
                     source.display()
                 )
             }
-            Self::Hardlink => {
-                format!(
-                    "Created hard link: {} -> {}",
-                    link.display(),
-                    source.display()
-                )
-            }
+            Self::Hardlink => hardlink_created_message(source, link),
         }
+    }
+}
+
+fn hardlink_created_message(source: &Path, link: &Path) -> String {
+    if source.is_dir() {
+        format!(
+            "Created hard-link tree: {} -> {}",
+            link.display(),
+            source.display()
+        )
+    } else {
+        format!(
+            "Created file hard link: {} -> {}",
+            link.display(),
+            source.display()
+        )
     }
 }
 
@@ -816,77 +810,6 @@ fn direct_step_result(
 }
 
 #[tauri::command]
-pub fn list_directory(path: Option<String>) -> GuiResult<DirectoryListing> {
-    let directory = directory_for_listing(path.as_deref().map(PathBuf::from))?;
-    let mut entries = Vec::new();
-
-    for entry in fs::read_dir(&directory).map_err(gui_error)? {
-        let entry = entry.map_err(gui_error)?;
-        let file_type = entry.file_type().map_err(gui_error)?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        entries.push(PathEntry {
-            name,
-            path: entry.path().display().to_string(),
-            is_dir: file_type.is_dir(),
-        });
-    }
-
-    entries.sort_by(|left, right| {
-        right
-            .is_dir
-            .cmp(&left.is_dir)
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-    });
-
-    Ok(DirectoryListing {
-        parent: directory.parent().map(|path| path.display().to_string()),
-        current: directory.display().to_string(),
-        entries,
-    })
-}
-
-fn directory_for_listing(path: Option<PathBuf>) -> GuiResult<PathBuf> {
-    let path = path.unwrap_or_else(default_start_dir);
-    if path.is_dir() {
-        return Ok(path);
-    }
-    if path.is_file()
-        && let Some(parent) = path.parent()
-        && parent.is_dir()
-    {
-        return Ok(parent.to_path_buf());
-    }
-    if !path.exists()
-        && let Some(parent) = path.parent()
-        && parent.is_dir()
-    {
-        return Ok(parent.to_path_buf());
-    }
-
-    Err(gui_error(io::Error::new(
-        ErrorKind::NotFound,
-        format!("directory not found: {}", path.display()),
-    )))
-}
-
-fn default_start_dir() -> PathBuf {
-    env::current_dir()
-        .ok()
-        .filter(|path| path.is_dir())
-        .or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .filter(|path| path.is_dir())
-        })
-        .or_else(|| {
-            env::var_os("USERPROFILE")
-                .map(PathBuf::from)
-                .filter(|path| path.is_dir())
-        })
-        .unwrap_or_else(env::temp_dir)
-}
-
-#[tauri::command]
 pub fn create_symlink(source: String, link: String, force: bool) -> GuiResult<OperationResult> {
     let source = PathBuf::from(source);
     let link = PathBuf::from(link);
@@ -904,13 +827,9 @@ pub fn create_symlink(source: String, link: String, force: bool) -> GuiResult<Op
 pub fn create_hardlink(source: String, link: String, force: bool) -> GuiResult<OperationResult> {
     let source = PathBuf::from(source);
     let link = PathBuf::from(link);
-    linkforge_core::create_hard_link(&source, &link, force).map_err(gui_error)?;
+    create_one_link(&source, &link, DirectLinkKind::Hardlink, force).map_err(gui_error)?;
     Ok(OperationResult {
-        message: format!(
-            "Created hard link: {} -> {}",
-            link.display(),
-            source.display()
-        ),
+        message: hardlink_created_message(&source, &link),
     })
 }
 
@@ -1348,19 +1267,61 @@ mod tests {
         let link = temp.path().join("linked.txt");
         fs::write(&source, "hello").unwrap();
 
-        create_hardlink(
+        let result = create_hardlink(
             source.display().to_string(),
             link.display().to_string(),
             false,
         )
         .unwrap();
 
+        assert_eq!(
+            result.message,
+            format!(
+                "Created file hard link: {} -> {}",
+                link.display(),
+                source.display()
+            )
+        );
         assert!(
             same_file(source.display().to_string(), link.display().to_string())
                 .unwrap()
                 .same
         );
         assert!(link_count(source.display().to_string()).unwrap().count >= 2);
+    }
+
+    #[test]
+    fn hardlink_command_creates_directory_tree_for_directory_sources() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let nested = source.join("nested");
+        let link = temp.path().join("linked-tree");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&nested).unwrap();
+        fs::write(nested.join("nested.txt"), "nested").unwrap();
+
+        let result = create_hardlink(
+            source.display().to_string(),
+            link.display().to_string(),
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.message,
+            format!(
+                "Created hard-link tree: {} -> {}",
+                link.display(),
+                source.display()
+            )
+        );
+        assert!(
+            linkforge_core::is_same_file(
+                nested.join("nested.txt"),
+                link.join("nested").join("nested.txt"),
+            )
+            .unwrap()
+        );
     }
 
     #[test]
@@ -1425,6 +1386,8 @@ mod tests {
 
         assert_eq!(file_result.status, "created");
         assert_eq!(tree_result.status, "created");
+        assert!(file_result.message.contains("Created file hard link"));
+        assert!(tree_result.message.contains("Created hard-link tree"));
         assert!(linkforge_core::is_same_file(&file_source, target_dir.join("file.txt")).unwrap());
         assert!(
             linkforge_core::is_same_file(

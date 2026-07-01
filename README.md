@@ -59,11 +59,13 @@ linkforge completions fish
 
 The GUI supports:
 
-- Quick creation of symbolic links and hard links.
+- Quick creation of symbolic links, file hard links, and directory hard-link trees.
 - Link count and same-file inspection.
 - Hard-link sibling discovery, including scan-root selection on platforms that require it.
 - Hard-link group scanning for a directory tree.
 - Directory tree cloning while preserving internal hard-link relationships.
+
+GUI browse buttons use native system file, directory, and save dialogs for source, scan-root, link-path, and clone-destination selection.
 
 The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, and GNOME Files uses a `nautilus-python` extension.
 

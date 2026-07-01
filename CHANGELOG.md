@@ -14,6 +14,7 @@
 - Fixed file-manager drop batches to preflight picked sources, target directories, conflicts, and likely hard-link failures before creating links.
 - Fixed file-manager source-picking failures so missing paths and state-file write errors appear in a lightweight Tauri-rendered dialog while successful picks remain silent.
 - Fixed Windows 11 Explorer batch link drops so directory-background menus show drop actions and conflicts ask before renaming.
+- Fixed full-GUI hard-link creation so directory sources create hard-link directory trees, and replaced the custom GUI path picker with native system dialogs.
 - Added dedicated workspace crates for Windows and GNOME context-menu integration.
 - Added CLI help descriptions and shell completion generation for PowerShell, Bash, Zsh, and Fish.
 - Added Windows symbolic link creation support that requests unprivileged symlink creation when Developer Mode is enabled.

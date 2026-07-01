@@ -39,7 +39,7 @@
         <section id="view-quick" class="view active">
           <div class="toolbar segmented">
             <button class="mode active" data-mode="symlink">Symlink</button>
-            <button class="mode" data-mode="hardlink">Hard link</button>
+            <button class="mode" data-mode="hardlink">Hard link / tree</button>
             <button class="mode" data-mode="link-count">Link count</button>
             <button class="mode" data-mode="siblings">Siblings</button>
           </div>
@@ -49,8 +49,8 @@
               Source
               <span class="field-row">
                 <input id="quick-source" type="text" autocomplete="off" />
-                <button type="button" class="icon-button browse-file" data-target="quick-source" title="Browse file">...</button>
-                <button type="button" class="icon-button browse-dir" data-target="quick-source" title="Browse directory">D</button>
+                <button type="button" class="icon-button browse-file" data-target="quick-source" title="Choose source file">...</button>
+                <button type="button" class="icon-button browse-dir" data-target="quick-source" title="Choose source directory">D</button>
               </span>
             </label>
 
@@ -58,7 +58,7 @@
               Link path
               <span class="field-row">
                 <input id="quick-link" type="text" autocomplete="off" />
-                <button type="button" class="icon-button save-path" data-target="quick-link" title="Choose path">...</button>
+                <button type="button" class="icon-button save-path" data-target="quick-link" title="Choose destination path">...</button>
               </span>
             </label>
 

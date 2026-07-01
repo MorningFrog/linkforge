@@ -1,5 +1,6 @@
 const tauriApi = window.__TAURI__ || {};
 const invoke = tauriApi.core?.invoke;
+const dialog = tauriApi.dialog || {};
 
 const state = {
   mode: "symlink",
@@ -439,145 +440,23 @@ function applyQuickMode(mode) {
 }
 
 async function choosePath(target, options) {
-  const value = await showPathPicker(target, options);
-  if (value) {
-    setInput(target, value);
-  }
-}
+  if (!requireTauri()) return;
 
-async function showPathPicker(target, options) {
-  if (!requireTauri()) return null;
-
-  let selectedPath = inputValue(target);
-  let currentListing = null;
-
-  const picker = document.createElement("div");
-  picker.className = "path-picker";
-
-  const fieldRow = document.createElement("div");
-  fieldRow.className = "field-row";
-
-  const pathInput = document.createElement("input");
-  pathInput.type = "text";
-  pathInput.autocomplete = "off";
-  pathInput.value = selectedPath;
-
-  const openButton = document.createElement("button");
-  openButton.type = "button";
-  openButton.className = "secondary-button";
-  openButton.textContent = "Open";
-
-  const upButton = document.createElement("button");
-  upButton.type = "button";
-  upButton.className = "secondary-button";
-  upButton.textContent = "Up";
-
-  fieldRow.append(pathInput, openButton, upButton);
-
-  const list = document.createElement("div");
-  list.className = "picker-list";
-  picker.append(fieldRow, list);
-
-  function renderPickerMessage(message) {
-    clearElement(list);
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = message;
-    list.append(empty);
-  }
-
-  function renderListing(listing) {
-    currentListing = listing;
-    clearElement(list);
-    upButton.disabled = !listing.parent;
-
-    if (!selectedPath || options.directory) {
-      selectedPath = listing.current;
-      pathInput.value = listing.current;
+  try {
+    const currentValue = inputValue(target);
+    const value = options.save
+      ? await dialog.save({ defaultPath: currentValue || undefined })
+      : await dialog.open({
+          directory: Boolean(options.directory),
+          multiple: false,
+          defaultPath: currentValue || undefined,
+        });
+    if (typeof value === "string" && value) {
+      setInput(target, value);
     }
-
-    if (!listing.entries.length) {
-      renderPickerMessage("No entries.");
-      return;
-    }
-
-    listing.entries.forEach((entry) => {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = `picker-row ${entry.isDir ? "directory" : "file"}`;
-      row.dataset.path = entry.path;
-      row.dataset.dir = String(entry.isDir);
-
-      const name = document.createElement("span");
-      name.textContent = entry.name;
-      const kind = document.createElement("span");
-      kind.className = "picker-kind";
-      kind.textContent = entry.isDir ? "Folder" : "File";
-      row.append(name, kind);
-
-      row.addEventListener("click", async () => {
-        selectedPath = entry.path;
-        pathInput.value = entry.path;
-        if (entry.isDir) {
-          await loadDirectory(entry.path);
-        } else {
-          document.querySelectorAll(".picker-row").forEach((item) => {
-            item.classList.toggle("selected", item.dataset.path === entry.path);
-          });
-        }
-      });
-
-      list.append(row);
-    });
+  } catch (error) {
+    displayError(error);
   }
-
-  async function loadDirectory(path) {
-    renderPickerMessage("Loading...");
-    try {
-      const listing = await invoke("list_directory", { path: path || null });
-      renderListing(listing);
-    } catch (error) {
-      const message = error?.message || String(error);
-      setStatus(message, "error");
-      renderPickerMessage(message);
-    }
-  }
-
-  openButton.addEventListener("click", () => loadDirectory(pathInput.value.trim()));
-  upButton.addEventListener("click", () => {
-    if (currentListing?.parent) {
-      loadDirectory(currentListing.parent);
-    }
-  });
-  pathInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      loadDirectory(pathInput.value.trim());
-    }
-  });
-
-  const title = options.save
-    ? "Choose Path"
-    : options.directory
-      ? "Choose Directory"
-      : "Choose File";
-  const modal = openModal({
-    title,
-    content: picker,
-    defaultValue: "cancel",
-    actions: [
-      { label: "Choose", value: "choose", className: "primary-button" },
-      { label: "Cancel", value: "cancel", className: "ghost-button" },
-    ],
-  });
-
-  await loadDirectory(selectedPath);
-  const result = await modal;
-  if (result.value !== "choose") {
-    return null;
-  }
-
-  return pathInput.value.trim() || selectedPath || currentListing?.current || null;
 }
 
 function directKindFromAction(action) {

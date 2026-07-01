@@ -6,6 +6,7 @@ fn main() {
     let launch_context = backend::LaunchContext::from_env();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(launch_context)
         .setup(|app| {
             backend::configure_initial_window(app)?;
@@ -19,7 +20,6 @@ fn main() {
             backend::pick_context_sources,
             backend::prepare_direct_drop,
             backend::create_direct_link_step,
-            backend::list_directory,
             backend::create_symlink,
             backend::create_hardlink,
             backend::same_file,

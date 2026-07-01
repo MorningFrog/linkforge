@@ -457,60 +457,6 @@ input[type="text"] {
   overflow-wrap: anywhere;
 }
 
-.path-picker {
-  display: grid;
-  gap: 12px;
-}
-
-.path-picker .field-row {
-  align-items: center;
-}
-
-.picker-list {
-  min-height: 220px;
-  max-height: 360px;
-  overflow: auto;
-  border: 1px solid #dbe1e8;
-  border-radius: 6px;
-  background: #f7f9fb;
-  padding: 6px;
-}
-
-.picker-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  padding: 8px 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.picker-row:hover,
-.picker-row.selected {
-  border-color: #c8d0da;
-  background: #ffffff;
-}
-
-.picker-row span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.picker-kind {
-  color: #6b7480;
-  font-size: 12px;
-}
-
-.picker-row.directory .picker-kind {
-  color: #245f73;
-}
-
 code {
   background: #eef3f4;
   border-radius: 4px;
