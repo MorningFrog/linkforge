@@ -23,6 +23,8 @@ Run the CLI locally with `cargo run -p linkforge-cli --` followed by a LinkForge
 cargo run -p linkforge-cli -- link-count path/to/file
 cargo run -p linkforge-cli -- same-file path/to/a path/to/b
 cargo run -p linkforge-cli -- scan-groups path/to/root
+cargo run -p linkforge-cli -- batch-hardlink --target-dir path/to/target path/to/source-a path/to/source-b
+cargo run -p linkforge-cli -- batch-symlink --target-dir path/to/target --dry-run path/to/source
 ```
 
 ### GUI
@@ -47,6 +49,7 @@ linkforge-gui --context-action <action> --paths <path>...
 ```
 
 Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations.
+Context-menu entries only launch the GUI and pass context; picked-source state, action names, and menu labels are shared through `linkforge-shared`, while actual batch link preflight and creation are handled by `linkforge-core`.
 
 ### Context Menu Integration
 
@@ -143,6 +146,18 @@ cargo uninstall linkforge-cli
 Use `Out-String` when loading generated PowerShell completions into the current session. Piping directly to `Invoke-Expression` can pass empty lines as empty commands.
 
 The completion command prints scripts to stdout and does not modify shell profiles. If you append completions to `$PROFILE` or another shell startup file during manual testing, remove those lines after testing to restore the local environment.
+
+### Batch Link Commands
+
+To manually test CLI batch creation:
+
+```text
+cargo run -p linkforge-cli -- batch-hardlink --target-dir path/to/target path/to/file-a path/to/file-b
+cargo run -p linkforge-cli -- batch-hardlink --target-dir path/to/target --on-conflict rename path/to/file
+cargo run -p linkforge-cli -- batch-symlink --target-dir path/to/target --dry-run path/to/file
+```
+
+Batch commands run the same core preflight used by GUI file-manager drops. The default conflict policy is `fail`; use `overwrite`, `rename`, or `skip` only when that behavior is intentional.
 
 ### Before Submitting
 

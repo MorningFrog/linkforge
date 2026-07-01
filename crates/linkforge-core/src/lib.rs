@@ -16,6 +16,63 @@ pub struct HardLinkGroup {
     pub paths: Vec<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkKind {
+    Symlink,
+    Hardlink,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictPolicy {
+    Fail,
+    Overwrite,
+    Rename,
+    Skip,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchPreflight {
+    pub problems: Vec<BatchProblem>,
+    pub conflicts: Vec<BatchConflict>,
+    pub warnings: Vec<BatchWarning>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchProblem {
+    pub source: Option<PathBuf>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchConflict {
+    pub source: PathBuf,
+    pub link: PathBuf,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchWarning {
+    pub source: Option<PathBuf>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkStepStatus {
+    Created,
+    Renamed,
+    Skipped,
+    NeedsConflict,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkStepResult {
+    pub status: LinkStepStatus,
+    pub source: PathBuf,
+    pub link: Option<PathBuf>,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct FileId {
     device: u64,
@@ -46,6 +103,22 @@ pub fn create_hard_link(
     reject_same_path_entry(source, link)?;
     prepare_target(link, force)?;
     fs::hard_link(source, link)
+}
+
+pub fn create_link(
+    source: impl AsRef<Path>,
+    link: impl AsRef<Path>,
+    kind: LinkKind,
+    force: bool,
+) -> io::Result<()> {
+    let source = source.as_ref();
+    let link = link.as_ref();
+
+    match kind {
+        LinkKind::Symlink => create_symlink(source, link, force),
+        LinkKind::Hardlink if source.is_dir() => create_hard_link_tree(source, link, force),
+        LinkKind::Hardlink => create_hard_link(source, link, force),
+    }
 }
 
 pub fn is_same_file(path_a: impl AsRef<Path>, path_b: impl AsRef<Path>) -> io::Result<bool> {
@@ -211,6 +284,219 @@ pub fn create_hard_link_tree(
     Ok(())
 }
 
+pub fn preflight_link_batch(
+    sources: &[PathBuf],
+    target_dir: impl AsRef<Path>,
+    kind: LinkKind,
+) -> BatchPreflight {
+    let target_dir = target_dir.as_ref();
+    let mut problems = Vec::new();
+    let mut conflicts = Vec::new();
+    let mut warnings = Vec::new();
+    let target_metadata = fs::metadata(target_dir);
+
+    match &target_metadata {
+        Ok(metadata) if !metadata.is_dir() => problems.push(BatchProblem {
+            source: None,
+            message: format!("{} is not a directory.", target_dir.display()),
+        }),
+        Ok(_) => {
+            if let Err(error) = target_dir_is_writable(target_dir) {
+                problems.push(BatchProblem {
+                    source: None,
+                    message: format!("{} is not writable: {error}", target_dir.display()),
+                });
+            }
+        }
+        Err(error) => problems.push(BatchProblem {
+            source: None,
+            message: format!("{} cannot be read: {error}", target_dir.display()),
+        }),
+    }
+
+    let target_device = target_metadata.as_ref().ok().and_then(device_id);
+
+    for source in sources {
+        let Some(file_name) = source.file_name() else {
+            problems.push(BatchProblem {
+                source: Some(source.clone()),
+                message: "Source has no file name.".to_string(),
+            });
+            continue;
+        };
+
+        let link = target_dir.join(file_name);
+        if fs::symlink_metadata(&link).is_ok() {
+            let message = match same_path_entry(source, &link) {
+                Ok(true) => "The target is the picked source; overwrite would remove the source."
+                    .to_string(),
+                Ok(false) => "The target already exists.".to_string(),
+                Err(error) => format!(
+                    "The target already exists, but could not be compared with the source: {error}"
+                ),
+            };
+            conflicts.push(BatchConflict {
+                source: source.clone(),
+                link,
+                message,
+            });
+        }
+
+        let metadata = match fs::symlink_metadata(source) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                problems.push(BatchProblem {
+                    source: Some(source.clone()),
+                    message: format!("Source cannot be read: {error}"),
+                });
+                continue;
+            }
+        };
+
+        if matches!(kind, LinkKind::Hardlink) {
+            if metadata.is_dir() {
+                warnings.push(BatchWarning {
+                    source: Some(source.clone()),
+                    message: "Hard-linking a directory creates a hard-link tree; nested failures may stop that source.".to_string(),
+                });
+            } else if !metadata.is_file() {
+                warnings.push(BatchWarning {
+                    source: Some(source.clone()),
+                    message: format!(
+                        "Hard links may fail for this {}.",
+                        source_kind_label(&metadata)
+                    ),
+                });
+            }
+
+            if metadata.is_file()
+                && target_device.is_some()
+                && device_id(&metadata).is_some()
+                && device_id(&metadata) != target_device
+            {
+                warnings.push(BatchWarning {
+                    source: Some(source.clone()),
+                    message: "Hard links usually cannot cross filesystems or volumes.".to_string(),
+                });
+            }
+        }
+    }
+
+    BatchPreflight {
+        problems,
+        conflicts,
+        warnings,
+    }
+}
+
+pub fn create_link_batch_step(
+    source: impl AsRef<Path>,
+    target_dir: impl AsRef<Path>,
+    kind: LinkKind,
+    conflict_policy: ConflictPolicy,
+) -> LinkStepResult {
+    let source = source.as_ref();
+    let target_dir = target_dir.as_ref();
+    let Some(file_name) = source.file_name() else {
+        return link_step_result(
+            LinkStepStatus::Skipped,
+            source,
+            None,
+            format!("{}: source has no file name", source.display()),
+        );
+    };
+
+    let mut link = target_dir.join(file_name);
+    let mut force = false;
+    let mut renamed = false;
+
+    if fs::symlink_metadata(&link).is_ok() {
+        let same_entry = same_path_entry(source, &link).unwrap_or(false);
+        match conflict_policy {
+            ConflictPolicy::Fail => {
+                return link_step_result(
+                    LinkStepStatus::NeedsConflict,
+                    source,
+                    Some(&link),
+                    if same_entry {
+                        "The target is the picked source; overwrite would remove the source."
+                            .to_string()
+                    } else {
+                        "The target already exists.".to_string()
+                    },
+                );
+            }
+            ConflictPolicy::Overwrite if same_entry => {
+                return link_step_result(
+                    LinkStepStatus::Failed,
+                    source,
+                    Some(&link),
+                    format!("{}: {}", source.display(), same_path_entry_message()),
+                );
+            }
+            ConflictPolicy::Overwrite => force = true,
+            ConflictPolicy::Rename => {
+                link = available_link_path(target_dir, Path::new(file_name));
+                renamed = true;
+            }
+            ConflictPolicy::Skip => {
+                return link_step_result(
+                    LinkStepStatus::Skipped,
+                    source,
+                    Some(&link),
+                    format!("{}: target already exists", link.display()),
+                );
+            }
+        }
+    }
+
+    match create_link(source, &link, kind, force) {
+        Ok(()) => link_step_result(
+            if renamed {
+                LinkStepStatus::Renamed
+            } else {
+                LinkStepStatus::Created
+            },
+            source,
+            Some(&link),
+            created_message(kind, source, &link),
+        ),
+        Err(error) => link_step_result(
+            LinkStepStatus::Failed,
+            source,
+            Some(&link),
+            format!("{}: {error}", source.display()),
+        ),
+    }
+}
+
+pub fn available_link_path(target_dir: &Path, source_name: &Path) -> PathBuf {
+    let stem = source_name
+        .file_stem()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(source_name.as_os_str())
+        .to_string_lossy();
+    let extension = source_name.extension().map(|value| value.to_string_lossy());
+
+    for index in 1.. {
+        let suffix = if index == 1 {
+            " - Link".to_string()
+        } else {
+            format!(" - Link ({index})")
+        };
+        let candidate_name = match extension.as_deref() {
+            Some(ext) if !ext.is_empty() => format!("{stem}{suffix}.{ext}"),
+            _ => format!("{stem}{suffix}"),
+        };
+        let candidate = target_dir.join(candidate_name);
+        if fs::symlink_metadata(&candidate).is_err() {
+            return candidate;
+        }
+    }
+
+    unreachable!("unbounded rename search should always return a candidate")
+}
+
 fn scan_hard_link_siblings(path: &Path, root: &Path) -> io::Result<Vec<PathBuf>> {
     let target_id = file_id(path)?;
     let mut siblings = Vec::new();
@@ -257,6 +543,10 @@ fn same_path_entry(left: &Path, right: &Path) -> io::Result<bool> {
         && same_file_name(left_name, right_name))
 }
 
+fn same_path_entry_message() -> String {
+    "source and target must be different paths".to_string()
+}
+
 fn canonical_parent(parent: &Path) -> &Path {
     if parent.as_os_str().is_empty() {
         Path::new(".")
@@ -274,6 +564,87 @@ fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
 #[cfg(not(windows))]
 fn same_file_name(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
     left == right
+}
+
+fn target_dir_is_writable(target_dir: &Path) -> io::Result<()> {
+    let metadata = fs::metadata(target_dir)?;
+    if metadata.permissions().readonly() {
+        return Err(io::Error::new(
+            ErrorKind::PermissionDenied,
+            format!("{} is read-only", target_dir.display()),
+        ));
+    }
+
+    let probe = target_dir.join(format!(".linkforge-write-test-{}", std::process::id()));
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(_) => {
+            fs::remove_file(&probe)?;
+            Ok(())
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn source_kind_label(metadata: &fs::Metadata) -> &'static str {
+    let file_type = metadata.file_type();
+    if file_type.is_file() {
+        "file"
+    } else if file_type.is_dir() {
+        "directory"
+    } else if file_type.is_symlink() {
+        "symlink"
+    } else {
+        "special file"
+    }
+}
+
+#[cfg(unix)]
+fn device_id(metadata: &fs::Metadata) -> Option<u64> {
+    Some(metadata.dev())
+}
+
+#[cfg(not(unix))]
+fn device_id(_metadata: &fs::Metadata) -> Option<u64> {
+    None
+}
+
+fn created_message(kind: LinkKind, source: &Path, link: &Path) -> String {
+    match kind {
+        LinkKind::Symlink => format!(
+            "Created symbolic link: {} -> {}",
+            link.display(),
+            source.display()
+        ),
+        LinkKind::Hardlink if source.is_dir() => format!(
+            "Created hard-link tree: {} -> {}",
+            link.display(),
+            source.display()
+        ),
+        LinkKind::Hardlink => format!(
+            "Created file hard link: {} -> {}",
+            link.display(),
+            source.display()
+        ),
+    }
+}
+
+fn link_step_result(
+    status: LinkStepStatus,
+    source: &Path,
+    link: Option<&Path>,
+    message: String,
+) -> LinkStepResult {
+    LinkStepResult {
+        status,
+        source: source.to_path_buf(),
+        link: link.map(Path::to_path_buf),
+        message,
+    }
 }
 
 fn prepare_target(path: &Path, force: bool) -> io::Result<()> {
@@ -757,6 +1128,151 @@ mod tests {
         create_hard_link_tree(&source_dir, &file_target, true).unwrap();
         assert!(is_same_file(source_dir.join("file.txt"), file_target.join("file.txt")).unwrap());
         assert!(create_hard_link_tree(&source_dir, &dir_target, true).is_err());
+    }
+
+    #[test]
+    fn available_link_path_handles_extensions_and_repeated_conflicts() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("same - Link.txt"), "one").unwrap();
+        fs::write(temp.path().join("same - Link (2).txt"), "two").unwrap();
+
+        assert_eq!(
+            available_link_path(temp.path(), Path::new("same.txt")),
+            temp.path().join("same - Link (3).txt")
+        );
+        assert_eq!(
+            available_link_path(temp.path(), Path::new("same")),
+            temp.path().join("same - Link")
+        );
+    }
+
+    #[test]
+    fn create_link_creates_file_links_and_directory_trees() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.txt");
+        let hardlink = temp.path().join("hard.txt");
+        let source_dir = temp.path().join("source-dir");
+        let nested = source_dir.join("nested");
+        let tree = temp.path().join("tree");
+        fs::write(&source, "hello").unwrap();
+        fs::create_dir(&source_dir).unwrap();
+        fs::create_dir(&nested).unwrap();
+        fs::write(nested.join("nested.txt"), "nested").unwrap();
+
+        create_link(&source, &hardlink, LinkKind::Hardlink, false).unwrap();
+        create_link(&source_dir, &tree, LinkKind::Hardlink, false).unwrap();
+
+        assert!(is_same_file(&source, &hardlink).unwrap());
+        assert!(
+            is_same_file(
+                nested.join("nested.txt"),
+                tree.join("nested").join("nested.txt")
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn batch_preflight_reports_problems_conflicts_and_warnings() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target");
+        let source = temp.path().join("same.txt");
+        let missing = temp.path().join("missing.txt");
+        let directory = temp.path().join("directory");
+        fs::create_dir(&target).unwrap();
+        fs::write(&source, "source").unwrap();
+        fs::write(target.join("same.txt"), "target").unwrap();
+        fs::create_dir(&directory).unwrap();
+
+        let preflight = preflight_link_batch(
+            &[source.clone(), missing.clone(), directory.clone()],
+            &target,
+            LinkKind::Hardlink,
+        );
+
+        assert_eq!(preflight.problems.len(), 1);
+        assert_eq!(preflight.problems[0].source, Some(missing));
+        assert_eq!(preflight.conflicts.len(), 1);
+        assert_eq!(preflight.conflicts[0].source, source);
+        assert!(preflight.warnings.iter().any(|warning| {
+            warning.source.as_ref() == Some(&directory)
+                && warning.message.contains("hard-link tree")
+        }));
+    }
+
+    #[test]
+    fn batch_preflight_reports_invalid_target_and_source_as_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("same.txt");
+        let target_file = temp.path().join("target.txt");
+        fs::write(&source, "source").unwrap();
+        fs::write(&target_file, "target").unwrap();
+
+        let invalid = preflight_link_batch(
+            std::slice::from_ref(&source),
+            &target_file,
+            LinkKind::Symlink,
+        );
+        assert!(invalid.problems[0].message.contains("is not a directory"));
+
+        let own_target = preflight_link_batch(
+            std::slice::from_ref(&source),
+            temp.path(),
+            LinkKind::Hardlink,
+        );
+        assert_eq!(own_target.conflicts[0].link, source);
+        assert!(own_target.conflicts[0].message.contains("picked source"));
+    }
+
+    #[test]
+    fn batch_step_handles_conflict_policies() {
+        let temp = tempfile::tempdir().unwrap();
+        let first_dir = temp.path().join("first");
+        let second_dir = temp.path().join("second");
+        let target = temp.path().join("target");
+        fs::create_dir(&first_dir).unwrap();
+        fs::create_dir(&second_dir).unwrap();
+        fs::create_dir(&target).unwrap();
+        let first = first_dir.join("same.txt");
+        let second = second_dir.join("same.txt");
+        fs::write(&first, "first").unwrap();
+        fs::write(&second, "second").unwrap();
+        fs::write(target.join("same.txt"), "existing").unwrap();
+
+        let needs_choice =
+            create_link_batch_step(&first, &target, LinkKind::Hardlink, ConflictPolicy::Fail);
+        assert_eq!(needs_choice.status, LinkStepStatus::NeedsConflict);
+
+        let renamed =
+            create_link_batch_step(&first, &target, LinkKind::Hardlink, ConflictPolicy::Rename);
+        assert_eq!(renamed.status, LinkStepStatus::Renamed);
+        assert_eq!(renamed.link, Some(target.join("same - Link.txt")));
+
+        let renamed_again =
+            create_link_batch_step(&second, &target, LinkKind::Hardlink, ConflictPolicy::Rename);
+        assert_eq!(renamed_again.link, Some(target.join("same - Link (2).txt")));
+
+        let skipped =
+            create_link_batch_step(&first, &target, LinkKind::Hardlink, ConflictPolicy::Skip);
+        assert_eq!(skipped.status, LinkStepStatus::Skipped);
+    }
+
+    #[test]
+    fn batch_step_rejects_overwriting_source_in_place() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("same.txt");
+        fs::write(&source, "source").unwrap();
+
+        let result = create_link_batch_step(
+            &source,
+            temp.path(),
+            LinkKind::Hardlink,
+            ConflictPolicy::Overwrite,
+        );
+
+        assert_eq!(result.status, LinkStepStatus::Failed);
+        assert!(result.message.contains("different paths"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "source");
     }
 
     fn create_test_file_symlink(source: &Path, link: &Path) -> bool {

@@ -1,9 +1,7 @@
 #![cfg(windows)]
 
 use std::cell::{Cell, RefCell};
-use std::env;
 use std::ffi::c_void;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -150,8 +148,8 @@ impl CommandKind {
             Self::PickSource => selection
                 .map(SelectionInfo::pick_source_title)
                 .unwrap_or_else(|| "Pick Link Source".to_string()),
-            Self::DropSymlink => picked_sources_title(LinkKind::Symlink),
-            Self::DropHardlink => picked_sources_title(LinkKind::Hardlink),
+            Self::DropSymlink => picked_sources_title(linkforge_shared::MenuLinkKind::Symlink),
+            Self::DropHardlink => picked_sources_title(linkforge_shared::MenuLinkKind::Hardlink),
             Self::Symlink => "Open Symlink in LinkForge...".to_string(),
             Self::Hardlink => "Open Hard Link in LinkForge...".to_string(),
             Self::SameFile => "Compare Same File".to_string(),
@@ -165,16 +163,16 @@ impl CommandKind {
     fn action(self) -> Option<&'static str> {
         match self {
             Self::Root => None,
-            Self::PickSource => Some("pick-source"),
-            Self::DropSymlink => Some("drop-symlink"),
-            Self::DropHardlink => Some("drop-hardlink"),
-            Self::Symlink => Some("symlink"),
-            Self::Hardlink => Some("hardlink"),
-            Self::SameFile => Some("same-file"),
-            Self::LinkCount => Some("link-count"),
-            Self::Siblings => Some("siblings"),
-            Self::ScanGroups => Some("scan-groups"),
-            Self::CloneTree => Some("clone-tree"),
+            Self::PickSource => Some(linkforge_shared::action::PICK_SOURCE),
+            Self::DropSymlink => Some(linkforge_shared::action::DROP_SYMLINK),
+            Self::DropHardlink => Some(linkforge_shared::action::DROP_HARDLINK),
+            Self::Symlink => Some(linkforge_shared::action::SYMLINK),
+            Self::Hardlink => Some(linkforge_shared::action::HARDLINK),
+            Self::SameFile => Some(linkforge_shared::action::SAME_FILE),
+            Self::LinkCount => Some(linkforge_shared::action::LINK_COUNT),
+            Self::Siblings => Some(linkforge_shared::action::SIBLINGS),
+            Self::ScanGroups => Some(linkforge_shared::action::SCAN_GROUPS),
+            Self::CloneTree => Some(linkforge_shared::action::CLONE_TREE),
         }
     }
 
@@ -462,13 +460,7 @@ impl SelectionInfo {
     }
 
     fn pick_source_title(&self) -> String {
-        if self.count > 1 {
-            format!("Pick {} Link Sources", self.count)
-        } else {
-            self.first_name()
-                .map(|name| format!("Pick Link Source: {name}"))
-                .unwrap_or_else(|| "Pick Link Source".to_string())
-        }
+        linkforge_shared::pick_source_title(self.count, self.first_name().as_deref())
     }
 
     fn first_name(&self) -> Option<String> {
@@ -539,12 +531,6 @@ fn shell_browser_from_site(site: &IUnknown) -> Option<IShellBrowser> {
     unsafe { provider.QueryService(&SID_STopLevelBrowser).ok() }
 }
 
-#[derive(Clone, Copy)]
-enum LinkKind {
-    Symlink,
-    Hardlink,
-}
-
 fn spawn_gui_action(action: &str, paths: &[String], background_target: bool) -> io::Result<()> {
     let gui = current_module_dir()
         .map(|dir| dir.join("linkforge-gui.exe"))
@@ -562,76 +548,16 @@ fn spawn_gui_action(action: &str, paths: &[String], background_target: bool) -> 
 }
 
 fn picked_sources() -> Vec<PathBuf> {
-    read_picked_sources_from(&picked_sources_state_path(), &picked_source_state_path())
+    linkforge_shared::picked_sources()
 }
 
-fn read_picked_sources_from(state_path: &Path, legacy_path: &Path) -> Vec<PathBuf> {
-    if let Ok(value) = fs::read_to_string(state_path)
-        && let Ok(paths) = serde_json::from_str::<Vec<String>>(&value)
-    {
-        let paths = existing_paths(paths);
-        if !paths.is_empty() {
-            return paths;
-        }
-    }
-
-    fs::read_to_string(legacy_path)
-        .ok()
-        .map(|value| existing_paths([value.trim().to_string()]))
-        .unwrap_or_default()
-}
-
-fn existing_paths(paths: impl IntoIterator<Item = String>) -> Vec<PathBuf> {
-    paths
-        .into_iter()
-        .map(PathBuf::from)
-        .filter(|path| path.exists())
-        .collect()
-}
-
-fn picked_sources_title(kind: LinkKind) -> String {
+fn picked_sources_title(kind: linkforge_shared::MenuLinkKind) -> String {
     let sources = picked_sources();
     picked_sources_title_for(kind, &sources)
 }
 
-fn picked_sources_title_for(kind: LinkKind, sources: &[PathBuf]) -> String {
-    match (kind, sources) {
-        (_, []) => match kind {
-            LinkKind::Symlink => "Create Symlink from Picked Source".to_string(),
-            LinkKind::Hardlink => "Create Hard Link from Picked Source".to_string(),
-        },
-        (LinkKind::Symlink, [source]) => path_display_name(source)
-            .map(|name| format!("Create Symlink from {name}"))
-            .unwrap_or_else(|| "Create Symlink from Picked Source".to_string()),
-        (LinkKind::Hardlink, [source]) if source.is_dir() => path_display_name(source)
-            .map(|name| format!("Create Hard-Link Tree from {name}"))
-            .unwrap_or_else(|| "Create Hard-Link Tree from Picked Source".to_string()),
-        (LinkKind::Hardlink, [source]) => path_display_name(source)
-            .map(|name| format!("Create Hard Link from {name}"))
-            .unwrap_or_else(|| "Create Hard Link from Picked Source".to_string()),
-        (LinkKind::Symlink, sources) => {
-            format!("Create Symlinks from {} Sources", sources.len())
-        }
-        (LinkKind::Hardlink, sources) => {
-            format!("Create Hard Links from {} Sources", sources.len())
-        }
-    }
-}
-
-fn picked_source_state_path() -> PathBuf {
-    env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(env::temp_dir)
-        .join("LinkForge")
-        .join("picked-source.txt")
-}
-
-fn picked_sources_state_path() -> PathBuf {
-    env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(env::temp_dir)
-        .join("LinkForge")
-        .join("picked-sources.json")
+fn picked_sources_title_for(kind: linkforge_shared::MenuLinkKind, sources: &[PathBuf]) -> String {
+    linkforge_shared::picked_sources_title(kind, sources)
 }
 
 fn path_display_name(path: impl AsRef<Path>) -> Option<String> {
@@ -694,6 +620,8 @@ fn alloc_wide(value: &str) -> Result<PWSTR> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
@@ -829,15 +757,21 @@ mod tests {
         fs::create_dir(&directory).unwrap();
 
         assert_eq!(
-            picked_sources_title_for(LinkKind::Symlink, std::slice::from_ref(&file)),
+            picked_sources_title_for(
+                linkforge_shared::MenuLinkKind::Symlink,
+                std::slice::from_ref(&file)
+            ),
             "Create Symlink from file.txt"
         );
         assert_eq!(
-            picked_sources_title_for(LinkKind::Hardlink, std::slice::from_ref(&directory)),
+            picked_sources_title_for(
+                linkforge_shared::MenuLinkKind::Hardlink,
+                std::slice::from_ref(&directory)
+            ),
             "Create Hard-Link Tree from directory"
         );
         assert_eq!(
-            picked_sources_title_for(LinkKind::Hardlink, &[file, directory]),
+            picked_sources_title_for(linkforge_shared::MenuLinkKind::Hardlink, &[file, directory]),
             "Create Hard Links from 2 Sources"
         );
     }

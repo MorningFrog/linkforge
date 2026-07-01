@@ -9,6 +9,8 @@
 - Added a two-step Windows Explorer workflow for picking a link source and creating symlinks or hard links in a target folder through the GUI.
 - Added Windows Explorer and GNOME Files two-file context-menu comparison through `Compare Same File`.
 - Added multi-source file-manager picking and batch symlink/hard-link creation, including hard-link directory trees for picked folders.
+- Added CLI batch symlink and hard-link commands with dry-run preflight and `fail`, `overwrite`, `rename`, and `skip` conflict policies.
+- Changed GUI and context-menu batch link workflows to share reusable core and desktop protocol logic with the CLI.
 - Changed file-manager drops to start LinkForge hidden, exit silently on clean success, and show lightweight Tauri-rendered dialogs only for conflicts, errors, and non-clean summaries instead of platform-native message boxes or the full main window.
 - Changed direct file-manager same-file and link-count actions to use lightweight Tauri-rendered result dialogs instead of opening the full LinkForge window.
 - Fixed file-manager drop batches to preflight picked sources, target directories, conflicts, and likely hard-link failures before creating links.

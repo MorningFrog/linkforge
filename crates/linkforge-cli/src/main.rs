@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
+use linkforge_core::{ConflictPolicy, LinkKind, LinkStepStatus};
 
 #[derive(Debug, Parser)]
 #[command(name = "linkforge")]
@@ -76,6 +77,44 @@ enum Command {
         )]
         force: bool,
     },
+    #[command(about = "Create symbolic links for multiple sources in a target directory")]
+    BatchSymlink {
+        #[arg(long, help = "Directory where links will be created")]
+        target_dir: PathBuf,
+        #[arg(
+            long,
+            help = "Preview problems, conflicts, and warnings without creating links"
+        )]
+        dry_run: bool,
+        #[arg(
+            long,
+            value_enum,
+            default_value = "fail",
+            help = "How to handle existing targets"
+        )]
+        on_conflict: ConflictOption,
+        #[arg(required = true, help = "Existing files or directories to link")]
+        sources: Vec<PathBuf>,
+    },
+    #[command(about = "Create hard links for multiple sources in a target directory")]
+    BatchHardlink {
+        #[arg(long, help = "Directory where links will be created")]
+        target_dir: PathBuf,
+        #[arg(
+            long,
+            help = "Preview problems, conflicts, and warnings without creating links"
+        )]
+        dry_run: bool,
+        #[arg(
+            long,
+            value_enum,
+            default_value = "fail",
+            help = "How to handle existing targets"
+        )]
+        on_conflict: ConflictOption,
+        #[arg(required = true, help = "Existing files or directories to link")]
+        sources: Vec<PathBuf>,
+    },
     #[command(about = "Generate shell completion scripts")]
     Completions {
         #[arg(value_enum, help = "Shell to generate completions for")]
@@ -92,6 +131,14 @@ enum CompletionShell {
     Fish,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ConflictOption {
+    Fail,
+    Overwrite,
+    Rename,
+    Skip,
+}
+
 impl From<CompletionShell> for Shell {
     fn from(shell: CompletionShell) -> Self {
         match shell {
@@ -99,6 +146,17 @@ impl From<CompletionShell> for Shell {
             CompletionShell::Bash => Shell::Bash,
             CompletionShell::Zsh => Shell::Zsh,
             CompletionShell::Fish => Shell::Fish,
+        }
+    }
+}
+
+impl From<ConflictOption> for ConflictPolicy {
+    fn from(option: ConflictOption) -> Self {
+        match option {
+            ConflictOption::Fail => ConflictPolicy::Fail,
+            ConflictOption::Overwrite => ConflictPolicy::Overwrite,
+            ConflictOption::Rename => ConflictPolicy::Rename,
+            ConflictOption::Skip => ConflictPolicy::Skip,
         }
     }
 }
@@ -187,6 +245,24 @@ fn run() -> std::io::Result<()> {
                 dest_dir.display()
             );
         }
+        Command::BatchSymlink {
+            target_dir,
+            dry_run,
+            on_conflict,
+            sources,
+        } => run_batch(LinkKind::Symlink, target_dir, sources, dry_run, on_conflict)?,
+        Command::BatchHardlink {
+            target_dir,
+            dry_run,
+            on_conflict,
+            sources,
+        } => run_batch(
+            LinkKind::Hardlink,
+            target_dir,
+            sources,
+            dry_run,
+            on_conflict,
+        )?,
         Command::Completions { shell } => {
             let mut command = Cli::command();
             generate(
@@ -199,4 +275,80 @@ fn run() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn run_batch(
+    kind: LinkKind,
+    target_dir: PathBuf,
+    sources: Vec<PathBuf>,
+    dry_run: bool,
+    on_conflict: ConflictOption,
+) -> std::io::Result<()> {
+    let preflight = linkforge_core::preflight_link_batch(&sources, &target_dir, kind);
+    print_preflight(&preflight);
+
+    if !preflight.problems.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "batch preflight found problems",
+        ));
+    }
+
+    if matches!(on_conflict, ConflictOption::Fail) && !preflight.conflicts.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "batch preflight found conflicts",
+        ));
+    }
+
+    if dry_run {
+        println!("Dry run complete. No links were created.");
+        return Ok(());
+    }
+
+    let mut had_failure = false;
+    for source in sources {
+        let result = linkforge_core::create_link_batch_step(
+            &source,
+            &target_dir,
+            kind,
+            ConflictPolicy::from(on_conflict),
+        );
+        println!("{}", result.message);
+        match result.status {
+            LinkStepStatus::Created | LinkStepStatus::Renamed | LinkStepStatus::Skipped => {}
+            LinkStepStatus::NeedsConflict | LinkStepStatus::Failed => had_failure = true,
+        }
+    }
+
+    if had_failure {
+        Err(std::io::Error::other("one or more batch items failed"))
+    } else {
+        Ok(())
+    }
+}
+
+fn print_preflight(preflight: &linkforge_core::BatchPreflight) {
+    for problem in &preflight.problems {
+        print_finding("Problem", problem.source.as_ref(), &problem.message);
+    }
+    for conflict in &preflight.conflicts {
+        println!(
+            "Conflict: {} -> {}: {}",
+            conflict.source.display(),
+            conflict.link.display(),
+            conflict.message
+        );
+    }
+    for warning in &preflight.warnings {
+        print_finding("Warning", warning.source.as_ref(), &warning.message);
+    }
+}
+
+fn print_finding(label: &str, source: Option<&PathBuf>, message: &str) {
+    if let Some(source) = source {
+        println!("{label}: {}: {message}", source.display());
+    } else {
+        println!("{label}: {message}");
+    }
 }

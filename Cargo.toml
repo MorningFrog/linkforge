@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/linkforge-core",
+    "crates/linkforge-shared",
     "crates/linkforge-cli",
     "crates/linkforge-gui",
     "crates/linkforge-context-menu-windows",
