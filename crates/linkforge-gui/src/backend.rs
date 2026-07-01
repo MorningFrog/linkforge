@@ -8,6 +8,9 @@ use std::process::Command;
 use serde::Serialize;
 use tauri::{AppHandle, LogicalSize, Manager, WebviewWindow};
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchContext {
@@ -61,6 +64,30 @@ pub struct ScanGroupsResult {
 pub struct DirectDropContext {
     pub sources: Vec<String>,
     pub target_dir: String,
+    pub preflight: DirectDropPreflight,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectDropPreflight {
+    pub problems: Vec<DirectDropPreflightItem>,
+    pub conflicts: Vec<DirectDropPreflightConflict>,
+    pub warnings: Vec<DirectDropPreflightItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectDropPreflightItem {
+    pub source: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectDropPreflightConflict {
+    pub source: String,
+    pub link: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -339,6 +366,150 @@ fn describe_current_dir() -> String {
         .unwrap_or_else(|error| format!("<unavailable: {error}>"))
 }
 
+fn target_dir_is_writable(target_dir: &Path) -> io::Result<()> {
+    let metadata = fs::metadata(target_dir)?;
+    if metadata.permissions().readonly() {
+        return Err(io::Error::new(
+            ErrorKind::PermissionDenied,
+            format!("{} is read-only", target_dir.display()),
+        ));
+    }
+
+    let probe = target_dir.join(format!(".linkforge-write-test-{}", std::process::id()));
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(_) => {
+            fs::remove_file(&probe)?;
+            Ok(())
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn source_kind_label(metadata: &fs::Metadata) -> &'static str {
+    let file_type = metadata.file_type();
+    if file_type.is_file() {
+        "file"
+    } else if file_type.is_dir() {
+        "directory"
+    } else if file_type.is_symlink() {
+        "symlink"
+    } else {
+        "special file"
+    }
+}
+
+#[cfg(unix)]
+fn device_id(metadata: &fs::Metadata) -> Option<u64> {
+    Some(metadata.dev())
+}
+
+#[cfg(not(unix))]
+fn device_id(_metadata: &fs::Metadata) -> Option<u64> {
+    None
+}
+
+fn build_direct_drop_preflight(
+    sources: &[PathBuf],
+    target_dir: &Path,
+    kind: DirectLinkKind,
+) -> DirectDropPreflight {
+    let mut problems = Vec::new();
+    let mut conflicts = Vec::new();
+    let mut warnings = Vec::new();
+    let target_metadata = fs::metadata(target_dir);
+
+    match &target_metadata {
+        Ok(metadata) if !metadata.is_dir() => problems.push(DirectDropPreflightItem {
+            source: None,
+            message: format!("{} is not a directory.", target_dir.display()),
+        }),
+        Ok(_) => {
+            if let Err(error) = target_dir_is_writable(target_dir) {
+                problems.push(DirectDropPreflightItem {
+                    source: None,
+                    message: format!("{} is not writable: {error}", target_dir.display()),
+                });
+            }
+        }
+        Err(error) => problems.push(DirectDropPreflightItem {
+            source: None,
+            message: format!("{} cannot be read: {error}", target_dir.display()),
+        }),
+    }
+
+    let target_device = target_metadata.as_ref().ok().and_then(device_id);
+
+    for source in sources {
+        let source_text = source.display().to_string();
+        let Some(file_name) = source.file_name() else {
+            problems.push(DirectDropPreflightItem {
+                source: Some(source_text),
+                message: "Source has no file name.".to_string(),
+            });
+            continue;
+        };
+
+        let link = target_dir.join(file_name);
+        if fs::symlink_metadata(&link).is_ok() {
+            conflicts.push(DirectDropPreflightConflict {
+                source: source_text.clone(),
+                link: link.display().to_string(),
+                message: "The target already exists.".to_string(),
+            });
+        }
+
+        let metadata = match fs::symlink_metadata(source) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                problems.push(DirectDropPreflightItem {
+                    source: Some(source_text),
+                    message: format!("Source cannot be read: {error}"),
+                });
+                continue;
+            }
+        };
+
+        if matches!(kind, DirectLinkKind::Hardlink) {
+            if metadata.is_dir() {
+                warnings.push(DirectDropPreflightItem {
+                    source: Some(source_text.clone()),
+                    message: "Hard-linking a directory creates a hard-link tree; nested failures may stop that source.".to_string(),
+                });
+            } else if !metadata.is_file() {
+                warnings.push(DirectDropPreflightItem {
+                    source: Some(source_text.clone()),
+                    message: format!(
+                        "Hard links may fail for this {}.",
+                        source_kind_label(&metadata)
+                    ),
+                });
+            }
+
+            if metadata.is_file()
+                && target_device.is_some()
+                && device_id(&metadata).is_some()
+                && device_id(&metadata) != target_device
+            {
+                warnings.push(DirectDropPreflightItem {
+                    source: Some(source_text),
+                    message: "Hard links usually cannot cross filesystems or volumes.".to_string(),
+                });
+            }
+        }
+    }
+
+    DirectDropPreflight {
+        problems,
+        conflicts,
+        warnings,
+    }
+}
+
 #[cfg(windows)]
 fn link_error(error: io::Error) -> io::Error {
     if error.raw_os_error() == Some(1314) {
@@ -491,7 +662,14 @@ fn available_link_path(target_dir: &Path, source_name: &Path) -> PathBuf {
 pub fn prepare_direct_drop(
     targets: Vec<String>,
     background_target: bool,
+    kind: String,
 ) -> GuiResult<DirectDropContext> {
+    let kind = DirectLinkKind::from_str(&kind).ok_or_else(|| {
+        gui_error(io::Error::new(
+            ErrorKind::InvalidInput,
+            format!("unsupported link kind: {kind}"),
+        ))
+    })?;
     let sources = picked_sources();
     if sources.is_empty() {
         return Err(gui_error(io::Error::new(
@@ -511,9 +689,12 @@ pub fn prepare_direct_drop(
         )));
     };
 
+    let preflight = build_direct_drop_preflight(&sources, &target_dir, kind);
+
     Ok(DirectDropContext {
         sources: paths_to_strings(sources),
         target_dir: target_dir.display().to_string(),
+        preflight,
     })
 }
 
@@ -1052,6 +1233,112 @@ mod tests {
 
         assert_eq!(direct_link_target_dir(&targets, true), Some(current_dir));
         assert_eq!(direct_link_target_dir(&targets, false), None);
+    }
+
+    #[test]
+    fn direct_drop_preflight_reports_missing_sources() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        let missing = temp.path().join("missing.txt");
+        fs::create_dir(&target_dir).unwrap();
+
+        let preflight =
+            build_direct_drop_preflight(&[missing.clone()], &target_dir, DirectLinkKind::Symlink);
+
+        assert_eq!(preflight.problems.len(), 1);
+        assert_eq!(
+            preflight.problems[0].source,
+            Some(missing.display().to_string())
+        );
+        assert!(
+            preflight.problems[0]
+                .message
+                .contains("Source cannot be read")
+        );
+    }
+
+    #[test]
+    fn direct_drop_preflight_reports_invalid_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.txt");
+        let target_file = temp.path().join("target.txt");
+        fs::write(&source, "source").unwrap();
+        fs::write(&target_file, "target").unwrap();
+
+        let preflight =
+            build_direct_drop_preflight(&[source], &target_file, DirectLinkKind::Symlink);
+
+        assert_eq!(preflight.problems.len(), 1);
+        assert!(preflight.problems[0].message.contains("is not a directory"));
+    }
+
+    #[test]
+    fn direct_drop_preflight_reports_existing_target_conflicts() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        let source = temp.path().join("same.txt");
+        fs::create_dir(&target_dir).unwrap();
+        fs::write(&source, "source").unwrap();
+        fs::write(target_dir.join("same.txt"), "existing").unwrap();
+
+        let preflight =
+            build_direct_drop_preflight(&[source.clone()], &target_dir, DirectLinkKind::Hardlink);
+
+        assert!(preflight.problems.is_empty());
+        assert_eq!(preflight.conflicts.len(), 1);
+        assert_eq!(preflight.conflicts[0].source, source.display().to_string());
+        assert_eq!(
+            preflight.conflicts[0].link,
+            target_dir.join("same.txt").display().to_string()
+        );
+    }
+
+    #[test]
+    fn direct_drop_preflight_reports_source_without_file_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        fs::create_dir(&target_dir).unwrap();
+
+        let preflight = build_direct_drop_preflight(
+            &[PathBuf::from(std::path::MAIN_SEPARATOR.to_string())],
+            &target_dir,
+            DirectLinkKind::Symlink,
+        );
+
+        assert_eq!(preflight.problems.len(), 1);
+        assert!(preflight.problems[0].message.contains("no file name"));
+    }
+
+    #[test]
+    fn direct_drop_preflight_warns_for_hardlink_directory_trees() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        let source_dir = temp.path().join("source-dir");
+        fs::create_dir(&target_dir).unwrap();
+        fs::create_dir(&source_dir).unwrap();
+
+        let preflight =
+            build_direct_drop_preflight(&[source_dir], &target_dir, DirectLinkKind::Hardlink);
+
+        assert!(preflight.problems.is_empty());
+        assert_eq!(preflight.warnings.len(), 1);
+        assert!(preflight.warnings[0].message.contains("hard-link tree"));
+    }
+
+    #[test]
+    fn direct_drop_preflight_clean_batch_has_no_findings() {
+        let temp = tempfile::tempdir().unwrap();
+        let target_dir = temp.path().join("target");
+        let source = temp.path().join("source.txt");
+        fs::create_dir(&target_dir).unwrap();
+        fs::write(&source, "source").unwrap();
+
+        let preflight =
+            build_direct_drop_preflight(&[source], &target_dir, DirectLinkKind::Symlink);
+
+        assert!(preflight.problems.is_empty());
+        assert!(preflight.conflicts.is_empty());
+        assert!(preflight.warnings.is_empty());
     }
 
     #[test]

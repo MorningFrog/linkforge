@@ -305,6 +305,105 @@ async function showConflictModal(path, allowApplyToRemaining) {
   };
 }
 
+function hasPreflightFindings(preflight) {
+  return Boolean(
+    preflight?.problems?.length ||
+      preflight?.conflicts?.length ||
+      preflight?.warnings?.length,
+  );
+}
+
+function appendPreflightSection(wrapper, title, items, className, renderItem) {
+  if (!items?.length) return;
+
+  const section = document.createElement("section");
+  section.className = `preflight-section ${className}`;
+
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  section.append(heading);
+
+  const list = document.createElement("ul");
+  items.forEach((item) => {
+    const row = document.createElement("li");
+    renderItem(row, item);
+    list.append(row);
+  });
+  section.append(list);
+  wrapper.append(section);
+}
+
+function appendPreflightPath(row, path) {
+  if (!path) return;
+  const code = document.createElement("code");
+  code.className = "path-code";
+  code.textContent = path;
+  row.append(code);
+}
+
+async function showPreflightModal(preflight) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "preflight-body";
+
+  appendPreflightSection(
+    wrapper,
+    "Problems",
+    preflight.problems,
+    "problem",
+    (row, item) => {
+      const text = document.createElement("p");
+      text.textContent = item.message;
+      row.append(text);
+      appendPreflightPath(row, item.source);
+    },
+  );
+
+  appendPreflightSection(
+    wrapper,
+    "Conflicts",
+    preflight.conflicts,
+    "conflict",
+    (row, item) => {
+      const text = document.createElement("p");
+      text.textContent = item.message;
+      row.append(text);
+      appendPreflightPath(row, item.link);
+    },
+  );
+
+  appendPreflightSection(
+    wrapper,
+    "Warnings",
+    preflight.warnings,
+    "warning",
+    (row, item) => {
+      const text = document.createElement("p");
+      text.textContent = item.message;
+      row.append(text);
+      appendPreflightPath(row, item.source);
+    },
+  );
+
+  const hasProblems = Boolean(preflight.problems?.length);
+  const actions = hasProblems
+    ? [{ label: "Cancel", value: "cancel", className: "primary-button" }]
+    : [
+        { label: "Continue", value: "continue", className: "primary-button" },
+        { label: "Skip Conflicts", value: "skip-conflicts", className: "secondary-button" },
+        { label: "Cancel", value: "cancel", className: "ghost-button" },
+      ];
+
+  const result = await openModal({
+    title: hasProblems ? "Preflight Failed" : "Review Batch",
+    content: wrapper,
+    defaultValue: "cancel",
+    tone: hasProblems ? "error" : "",
+    actions,
+  });
+
+  return result.value || "cancel";
+}
+
 async function runCommand(name, args, onSuccess) {
   if (!requireTauri()) return;
   setStatus("Running...", "idle");
@@ -572,13 +671,39 @@ async function runDirectDrop(context) {
     const drop = await invoke("prepare_direct_drop", {
       targets: context.paths || [],
       backgroundTarget: Boolean(context.backgroundTarget),
+      kind,
     });
 
     byId("context-label").textContent =
       `${context.action}: ${drop.sources.length} source(s) -> ${drop.targetDir}`;
 
-    for (let index = 0; index < drop.sources.length; index += 1) {
-      const source = drop.sources[index];
+    let sources = drop.sources;
+    if (hasPreflightFindings(drop.preflight)) {
+      await showLightweightWindow();
+      const preflightChoice = await showPreflightModal(drop.preflight);
+      if (preflightChoice === "cancel" || drop.preflight.problems?.length) {
+        summary.cancelled = drop.sources.length;
+        const message = directSummaryMessage(summary, kind);
+        resultMessage(message);
+        setStatus("Cancelled.", "idle");
+        if (!state.fullWindowOpen) {
+          await closeLightweightWindow();
+        }
+        return;
+      }
+
+      if (preflightChoice === "skip-conflicts") {
+        const conflictSources = new Set(drop.preflight.conflicts.map((item) => item.source));
+        drop.preflight.conflicts.forEach((item) => {
+          summary.skipped += 1;
+          summary.skippedDetails.push(`${item.link}: target already exists`);
+        });
+        sources = drop.sources.filter((source) => !conflictSources.has(source));
+      }
+    }
+
+    for (let index = 0; index < sources.length; index += 1) {
+      const source = sources[index];
       let result = await invoke("create_direct_link_step", {
         source,
         targetDir: drop.targetDir,
@@ -588,9 +713,9 @@ async function runDirectDrop(context) {
 
       if (result.status === "needsConflict") {
         await showLightweightWindow();
-        const answer = await showConflictModal(result.link, index < drop.sources.length - 1);
+        const answer = await showConflictModal(result.link, index < sources.length - 1);
         if (answer.choice === "cancel") {
-          summary.cancelled += drop.sources.length - index;
+          summary.cancelled += sources.length - index;
           break;
         }
         if (answer.applyToRemaining) {
@@ -605,7 +730,7 @@ async function runDirectDrop(context) {
       }
 
       recordDirectStep(summary, result);
-      setStatus(`Processed ${index + 1} of ${drop.sources.length}.`, "idle");
+      setStatus(`Processed ${index + 1} of ${sources.length}.`, "idle");
     }
 
     const message = directSummaryMessage(summary, kind);

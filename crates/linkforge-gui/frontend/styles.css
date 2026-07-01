@@ -411,6 +411,45 @@ input[type="text"] {
   margin: 0;
 }
 
+.preflight-body {
+  display: grid;
+  gap: 14px;
+}
+
+.preflight-section {
+  display: grid;
+  gap: 8px;
+}
+
+.preflight-section h4,
+.preflight-section p {
+  margin: 0;
+}
+
+.preflight-section h4 {
+  font-size: 14px;
+}
+
+.preflight-section ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.preflight-section li {
+  display: grid;
+  gap: 6px;
+}
+
+.preflight-section.problem h4 {
+  color: #9f1d28;
+}
+
+.preflight-section.warning h4 {
+  color: #865a00;
+}
+
 .path-code {
   display: block;
   max-height: 140px;

@@ -11,7 +11,7 @@
 
 ## P0: Drop Batch Reliability
 
-- [ ] Add preflight validation before GUI drop batch operations.
+- [x] Add preflight validation before GUI drop batch operations.
   - Check source existence before starting the batch.
   - Check target directory validity and writability.
   - Detect target-name conflicts up front.
