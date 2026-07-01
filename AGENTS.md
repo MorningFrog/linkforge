@@ -28,3 +28,13 @@ When changing context-menu behavior, menu labels, action routing, installer scri
 - GNOME Files advanced menu (`crates/linkforge-context-menu-gnome` and `scripts/context-menu/gnome`).
 
 Keep `README.md` synchronized with any intentional behavior differences between these menu integrations.
+
+## Compatibility and Fallback Policy
+
+Do not preserve obsolete code, behavior, configuration, or fallback paths by default.
+
+When making changes that do **not** affect public API compatibility, remove outdated implementations and avoid keeping legacy branches, compatibility shims, deprecated aliases, or unused fallback logic.
+
+When a change may affect API compatibility, stop and ask the user how to proceed. If the user explicitly says that breaking compatibility is acceptable, do not retain any deprecated APIs, legacy behavior, or compatibility fallbacks. Implement the clean new design directly.
+
+Fallbacks should only be kept when they are explicitly required for a known, current compatibility target or when the user asks for them. Avoid speculative compatibility code.
