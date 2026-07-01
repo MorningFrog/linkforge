@@ -12,6 +12,7 @@
 - Changed file-manager drops to start LinkForge hidden, exit silently on clean success, and show lightweight Tauri-rendered dialogs only for conflicts, errors, and non-clean summaries instead of platform-native message boxes or the full main window.
 - Changed direct file-manager same-file and link-count actions to use lightweight Tauri-rendered result dialogs instead of opening the full LinkForge window.
 - Fixed file-manager drop batches to preflight picked sources, target directories, conflicts, and likely hard-link failures before creating links.
+- Fixed lightweight conflict dialogs so preflight offers an explicit overwrite action, uses clearer conflict-review labels, removes the redundant header close button, and opens as a compact non-resizable window.
 - Fixed file-manager source-picking failures so missing paths and state-file write errors appear in a lightweight Tauri-rendered dialog while successful picks remain silent.
 - Fixed Windows and GNOME Files context-menu installers with stricter artifact checks, clearer verification commands, and more actionable install output.
 - Fixed Windows 11 Explorer batch link drops so directory-background menus show drop actions and conflicts ask before renaming.

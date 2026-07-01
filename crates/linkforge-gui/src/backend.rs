@@ -168,9 +168,9 @@ pub fn initial_context(context: tauri::State<'_, LaunchContext>) -> LaunchContex
 }
 
 const DROP_WINDOW_WIDTH: f64 = 560.0;
-const DROP_WINDOW_HEIGHT: f64 = 360.0;
+const DROP_WINDOW_HEIGHT: f64 = 300.0;
 const DROP_WINDOW_MIN_WIDTH: f64 = 520.0;
-const DROP_WINDOW_MIN_HEIGHT: f64 = 320.0;
+const DROP_WINDOW_MIN_HEIGHT: f64 = 260.0;
 const FULL_WINDOW_WIDTH: f64 = 1080.0;
 const FULL_WINDOW_HEIGHT: f64 = 760.0;
 const FULL_WINDOW_MIN_WIDTH: f64 = 900.0;
@@ -215,6 +215,9 @@ fn configure_drop_window(window: &WebviewWindow) -> Result<(), String> {
         .set_title("LinkForge")
         .map_err(|error| error.to_string())?;
     window
+        .set_resizable(false)
+        .map_err(|error| error.to_string())?;
+    window
         .set_min_size(Some(LogicalSize::new(
             DROP_WINDOW_MIN_WIDTH,
             DROP_WINDOW_MIN_HEIGHT,
@@ -229,6 +232,9 @@ fn configure_drop_window(window: &WebviewWindow) -> Result<(), String> {
 fn configure_full_window(window: &WebviewWindow) -> Result<(), String> {
     window
         .set_title("LinkForge")
+        .map_err(|error| error.to_string())?;
+    window
+        .set_resizable(true)
         .map_err(|error| error.to_string())?;
     window
         .set_min_size(Some(LogicalSize::new(

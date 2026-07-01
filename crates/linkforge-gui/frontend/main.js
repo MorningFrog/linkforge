@@ -256,7 +256,6 @@ function openModal({
     actionsEl.append(button);
   });
 
-  byId("modal-close").onclick = () => closeModal(defaultValue);
   backdrop.classList.remove("hidden");
 
   return new Promise((resolve) => {
@@ -386,13 +385,23 @@ async function showPreflightModal(preflight) {
   );
 
   const hasProblems = Boolean(preflight.problems?.length);
-  const actions = hasProblems
-    ? [{ label: "Cancel", value: "cancel", className: "primary-button" }]
-    : [
-        { label: "Continue", value: "continue", className: "primary-button" },
-        { label: "Skip Conflicts", value: "skip-conflicts", className: "secondary-button" },
-        { label: "Cancel", value: "cancel", className: "ghost-button" },
-      ];
+  const hasConflicts = Boolean(preflight.conflicts?.length);
+  let actions;
+  if (hasProblems) {
+    actions = [{ label: "Cancel", value: "cancel", className: "primary-button" }];
+  } else if (hasConflicts) {
+    actions = [
+      { label: "Overwrite Existing", value: "overwrite-conflicts", className: "primary-button" },
+      { label: "Rename / Review Each", value: "continue", className: "secondary-button" },
+      { label: "Skip Existing", value: "skip-conflicts", className: "secondary-button" },
+      { label: "Cancel", value: "cancel", className: "ghost-button" },
+    ];
+  } else {
+    actions = [
+      { label: "Continue", value: "continue", className: "primary-button" },
+      { label: "Cancel", value: "cancel", className: "ghost-button" },
+    ];
+  }
 
   const result = await openModal({
     title: hasProblems ? "Preflight Failed" : "Review Batch",
@@ -542,6 +551,7 @@ async function runDirectDrop(context) {
   const kind = directKindFromAction(context.action);
   const summary = createDirectSummary();
   let appliedChoice = null;
+  let overwriteSources = new Set();
 
   setResults([]);
   setStatus("Preparing batch link operation...", "idle");
@@ -578,16 +588,19 @@ async function runDirectDrop(context) {
           summary.skippedDetails.push(`${item.link}: target already exists`);
         });
         sources = drop.sources.filter((source) => !conflictSources.has(source));
+      } else if (preflightChoice === "overwrite-conflicts") {
+        overwriteSources = new Set(drop.preflight.conflicts.map((item) => item.source));
       }
     }
 
     for (let index = 0; index < sources.length; index += 1) {
       const source = sources[index];
+      const conflictChoice = overwriteSources.has(source) ? "overwrite" : appliedChoice;
       let result = await invoke("create_direct_link_step", {
         source,
         targetDir: drop.targetDir,
         kind,
-        conflictChoice: appliedChoice,
+        conflictChoice,
       });
 
       if (result.status === "needsConflict") {
