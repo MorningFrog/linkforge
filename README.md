@@ -13,6 +13,7 @@ LinkForge currently supports these core and CLI features:
 - Showing the sibling paths that are hard links to the same file. On Linux, this may require scanning one or more filesystem trees because filesystems generally do not maintain a direct reverse index from an inode to every pathname that references it.
 - Scanning a directory tree to find hard link groups.
 - Cloning a directory tree while preserving hard link relationships, so files that were hard-linked in the source remain hard-linked in the clone.
+- Creating a hard-link directory tree for a source directory, with regular files hard-linked and symbolic links copied as links.
 
 The GUI exposes the same file-link management and inspection features through a Tauri desktop app. Shell completion generation remains a CLI-only helper.
 
@@ -66,21 +67,24 @@ The GUI supports:
 
 The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, and GNOME Files uses a `nautilus-python` extension.
 
-On Windows, the Explorer menu also supports a two-step link workflow: right-click a file or folder and choose `LinkForge > Pick Link Source`, then right-click a target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. The direct symlink and hard-link commands create the link without opening the full GUI. If a target name already exists, LinkForge asks whether to overwrite it, create an automatically renamed link, or cancel.
+The file-manager menus also support a two-step link workflow: right-click one or more files or folders and choose `LinkForge > Pick Link Source`, then right-click a single target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. The direct symlink and hard-link commands create links without opening the full GUI. For picked directories, hard-link creation builds a directory tree whose regular files are hard links to the source files and whose symbolic links are copied as links. If a target name already exists, Windows asks whether to rename, overwrite, skip, or cancel, with an option to apply the choice to remaining conflicts; GNOME automatically chooses a renamed link.
 
 For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
 
 ### Context Menu Behavior
 
 LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu and launch `linkforge-gui --context-action <action> --paths <path>...`.
+Both integrations show `Compare Same File` when exactly two files are selected; this opens the Inspect view and runs the same-file comparison automatically.
 
 | Target | Windows 11 modern | GNOME Files advanced |
 | --- | --- | --- |
 | File | `Pick Link Source`, `Open Symlink in LinkForge...`, `Open Hard Link in LinkForge...`, `Show Link Count`, `Find Hard Link Siblings...` | Same items under `LinkForge` |
-| Directory | `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Open Symlink in LinkForge...`, `Find Hard Link Siblings...`, `Scan Hard Link Groups`, `Clone Tree Preserving Hard Links...` | Same dynamic items under `LinkForge` |
+| Multiple files/folders | `Pick N Link Sources` | Same item under `LinkForge` |
+| Two files | `Compare Same File` | Same item under `LinkForge` |
+| Directory | `Pick Link Source`, `Create Symlink(s) from ...`, `Create Hard Link(s) from ...`, `Open Symlink in LinkForge...`, `Find Hard Link Siblings...`, `Scan Hard Link Groups`, `Clone Tree Preserving Hard Links...` | Same dynamic items under `LinkForge` |
 | Directory background | `Create Symlink from ...`, `Create Hard Link from ...` | Same dynamic items under `LinkForge` |
 
-Windows 11 modern can dynamically hide unsupported items and include the picked source name in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. On GNOME, direct drop actions automatically choose a renamed link when the default target name already exists instead of showing the Windows conflict dialog.
+Windows 11 modern can dynamically hide unsupported items and include the picked source name or source count in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. On GNOME, direct drop actions automatically choose a renamed link when the default target name already exists instead of showing the Windows conflict dialog.
 
 ### Windows Explorer Context Menu
 

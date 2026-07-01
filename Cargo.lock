@@ -1830,6 +1830,7 @@ name = "linkforge-context-menu-windows"
 version = "0.1.0"
 dependencies = [
  "linkforge-core",
+ "serde_json",
  "tempfile",
  "windows",
  "windows-core 0.61.2",
@@ -1850,6 +1851,7 @@ version = "0.1.0"
 dependencies = [
  "linkforge-core",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

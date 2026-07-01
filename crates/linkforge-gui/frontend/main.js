@@ -138,6 +138,10 @@ async function runCommand(name, args, onSuccess) {
   }
 }
 
+async function runSameFileComparison(pathA, pathB) {
+  await runCommand("same_file", { pathA, pathB }, (result) => resultMessage(result.message));
+}
+
 function applyQuickMode(mode) {
   state.mode = mode;
   document.querySelectorAll(".mode").forEach((button) => {
@@ -289,6 +293,18 @@ async function loadInitialContext() {
       setInput("clone-source", context.paths[0]);
     }
 
+    if (context.action === "same-file") {
+      switchView("inspect");
+      if (context.paths?.length === 2) {
+        setInput("same-a", context.paths[0]);
+        setInput("same-b", context.paths[1]);
+        await runSameFileComparison(context.paths[0], context.paths[1]);
+      } else {
+        displayError(new Error("Same-file context action requires exactly two paths."));
+      }
+      return;
+    }
+
     const actionMap = {
       symlink: "symlink",
       hardlink: "hardlink",
@@ -331,13 +347,9 @@ function bindEvents() {
   byId("same-file-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      await runCommand(
-        "same_file",
-        {
-          pathA: requireField("same-a", "Path A"),
-          pathB: requireField("same-b", "Path B"),
-        },
-        (result) => resultMessage(result.message),
+      await runSameFileComparison(
+        requireField("same-a", "Path A"),
+        requireField("same-b", "Path B"),
       );
     } catch (error) {
       displayError(error);

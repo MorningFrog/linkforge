@@ -37,6 +37,7 @@ To test GUI context-menu launches without installing file-manager entries:
 
 ```text
 cargo run -p linkforge-gui -- --context-action link-count --paths path/to/file
+cargo run -p linkforge-gui -- --context-action same-file --paths path/to/a path/to/b
 ```
 
 The shared context-menu launch protocol is:
@@ -45,7 +46,7 @@ The shared context-menu launch protocol is:
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported GUI-opening actions are `symlink`, `hardlink`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while Windows drop actions use small message boxes for conflicts, errors, and completion before exiting without opening the Tauri window.
+Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while Windows drop actions use small dialogs for conflicts, errors, and completion before exiting without opening the Tauri window.
 
 ### Context Menu Integration
 
@@ -58,6 +59,7 @@ To locally test the Windows 11 top-level Explorer context menu:
 ```powershell
 cargo build -p linkforge-gui
 cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc
+powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unregister-LinkForgeModernContextMenu.ps1
 powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1
 Start-Process explorer
 ```
@@ -72,9 +74,9 @@ If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settin
 
 If registration fails with `0x80070057` and says `x-generate` is not a valid language, update the modern registration script so the manifest uses a concrete resource language such as `en-us`.
 
-Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to test `Create Symlink from ...` and `Create Hard Link from ...`.
+Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Select exactly two files to test `Compare Same File`. Select multiple files or folders to test `Pick N Link Sources`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to confirm `LinkForge` expands with `Create Symlink from ...` and `Create Hard Link from ...` instead of an empty submenu.
 
-For the two-step workflow, first pick a file or folder as the source. Then right-click a target folder or folder background and create a symlink or hard link from the picked source. Hard-link creation is only shown for picked file sources. If the target name already exists, test all three conflict choices: overwrite, automatically renamed link, and cancel.
+For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. If a target name already exists, test that the conflict dialog appears in front of Explorer and supports rename, overwrite, skip, cancel, and applying one choice to remaining conflicts. After the batch completes, confirm the summary dialog is also brought to the foreground.
 
 Remove the Windows 11 top-level context-menu entries after testing:
 
@@ -95,6 +97,8 @@ cargo run -p linkforge-context-menu-gnome -- uninstall
 Pass `--gui-exe /path/to/linkforge-gui` to `install` when `linkforge-gui` is not on `PATH`.
 
 The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautilus -q` after installing or uninstalling if the menu does not refresh.
+After installing, select exactly two files in GNOME Files to test `Compare Same File` from the LinkForge advanced menu.
+Also test selecting multiple files or folders, choosing `Pick N Link Sources`, and dropping them into one target folder with `Create Symlink...` or `Create Hard Link...`. GNOME direct drops automatically rename conflicting targets.
 
 The compatibility wrappers under `scripts/context-menu/gnome` delegate to the GNOME context-menu crate:
 

@@ -10,6 +10,7 @@
   - Linux note: this may require scanning selected filesystem trees because inode-to-path reverse lookup is not generally available as a direct filesystem operation.
 - [x] Scan a directory tree to find hard link groups.
 - [x] Clone a directory tree while preserving hard link relationships.
+- [x] Create a hard-link directory tree for a source directory.
 
 ## GUI Feature Scope
 
@@ -20,4 +21,5 @@
 - [x] Provide a GNOME Files advanced menu through `nautilus-python`.
 - [x] Provide a two-step Windows Explorer workflow for picking a link source and creating symlinks or hard links in a target folder.
 - [x] Keep Windows and GNOME context-menu integrations in dedicated crates.
-- [ ] Consider richer multi-select Explorer workflows, such as direct two-file compare from the shell menu.
+- [x] Support richer multi-select file-manager workflows, including direct two-file same-file compare from the shell menu.
+- [x] Support multi-source file-manager pick and batch symlink/hard-link creation workflows.

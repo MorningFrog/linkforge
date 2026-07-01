@@ -162,6 +162,53 @@ pub fn clone_tree_preserve_hardlinks(
     Ok(())
 }
 
+pub fn create_hard_link_tree(
+    source_dir: impl AsRef<Path>,
+    dest_dir: impl AsRef<Path>,
+    force: bool,
+) -> io::Result<()> {
+    let source_dir = source_dir.as_ref();
+    let dest_dir = dest_dir.as_ref();
+
+    if !fs::metadata(source_dir)?.is_dir() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "source must be a directory",
+        ));
+    }
+    prepare_directory_target(dest_dir, force)?;
+    fs::create_dir(dest_dir)?;
+
+    for entry in WalkDir::new(source_dir)
+        .follow_links(false)
+        .min_depth(1)
+        .sort_by_file_name()
+    {
+        let entry = entry?;
+        let source_path = entry.path();
+        let relative = source_path.strip_prefix(source_dir).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("failed to compute relative path: {error}"),
+            )
+        })?;
+        let dest_path = dest_dir.join(relative);
+        let file_type = entry.file_type();
+
+        if file_type.is_dir() {
+            fs::create_dir(&dest_path)?;
+        } else if file_type.is_symlink() {
+            let target = fs::read_link(source_path)?;
+            let target_is_dir = symlink_target_is_dir(source_path).unwrap_or(false);
+            create_symlink_inner(&target, &dest_path, target_is_dir)?;
+        } else if file_type.is_file() {
+            fs::hard_link(source_path, &dest_path)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn scan_hard_link_siblings(path: &Path, root: &Path) -> io::Result<Vec<PathBuf>> {
     let target_id = file_id(path)?;
     let mut siblings = Vec::new();
@@ -576,6 +623,67 @@ mod tests {
                     .is_symlink()
             );
         }
+    }
+
+    #[test]
+    fn creates_hard_link_tree_for_nested_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_dir = temp.path().join("source");
+        let nested = source_dir.join("nested");
+        let dest_dir = temp.path().join("dest");
+        fs::create_dir(&source_dir).unwrap();
+        fs::create_dir(&nested).unwrap();
+        let source_file = nested.join("file.txt");
+        fs::write(&source_file, "hello").unwrap();
+
+        create_hard_link_tree(&source_dir, &dest_dir, false).unwrap();
+
+        let linked_file = dest_dir.join("nested").join("file.txt");
+        assert_eq!(fs::read_to_string(&linked_file).unwrap(), "hello");
+        assert!(is_same_file(&source_file, &linked_file).unwrap());
+    }
+
+    #[test]
+    fn hard_link_tree_copies_symlinks_without_following_them() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_dir = temp.path().join("source");
+        let dest_dir = temp.path().join("dest");
+        fs::create_dir(&source_dir).unwrap();
+        fs::write(source_dir.join("original.txt"), "hello").unwrap();
+
+        if !create_test_file_symlink(
+            Path::new("original.txt"),
+            &source_dir.join("original-link.txt"),
+        ) {
+            return;
+        }
+
+        create_hard_link_tree(&source_dir, &dest_dir, false).unwrap();
+
+        let copied_symlink = dest_dir.join("original-link.txt");
+        assert!(
+            fs::symlink_metadata(copied_symlink)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[test]
+    fn hard_link_tree_force_replaces_files_but_not_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_dir = temp.path().join("source");
+        let file_target = temp.path().join("file-target");
+        let dir_target = temp.path().join("dir-target");
+        fs::create_dir(&source_dir).unwrap();
+        fs::write(source_dir.join("file.txt"), "hello").unwrap();
+        fs::write(&file_target, "old").unwrap();
+        fs::create_dir(&dir_target).unwrap();
+
+        assert!(create_hard_link_tree(&source_dir, &file_target, false).is_err());
+        create_hard_link_tree(&source_dir, &file_target, true).unwrap();
+        assert!(is_same_file(source_dir.join("file.txt"), file_target.join("file.txt")).unwrap());
+        assert!(create_hard_link_tree(&source_dir, &dir_target, true).is_err());
     }
 
     fn create_test_file_symlink(source: &Path, link: &Path) -> bool {
