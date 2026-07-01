@@ -69,6 +69,7 @@ The registration script defaults to debug artifacts. Pass `-Configuration Releas
 ```powershell
 cargo build -p linkforge-gui --release
 cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release
+powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unregister-LinkForgeModernContextMenu.ps1
 powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -Configuration Release
 ```
 
@@ -92,7 +93,7 @@ If registration fails with `0x80070057` and says `x-generate` is not a valid lan
 
 Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Select exactly two files to test `Compare Same File`. Select multiple files or folders to test `Pick N Link Sources`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to confirm `LinkForge` expands with `Create Symlink from ...` and `Create Hard Link from ...` instead of an empty submenu.
 
-For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. A clean drop should create the links and exit without showing any LinkForge window. If a target name already exists, test that only the lightweight Tauri-rendered conflict dialog appears, without the full LinkForge shell, and that it supports rename, overwrite, skip, cancel, applying one choice to remaining conflicts, and `Open LinkForge`. After a non-clean batch, confirm the lightweight summary dialog appears; after clicking `Open LinkForge`, confirm the same window expands into the full LinkForge interface instead of launching a second process.
+For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. A clean drop should create the links and exit without showing any LinkForge window. If a target name already exists, test that only the lightweight Tauri-rendered conflict dialog appears, without the full LinkForge shell, and that its preflight actions include `Overwrite Existing`, `Rename / Review Each`, `Skip Existing`, and `Cancel`. Confirm `Rename / Review Each` opens the per-conflict dialog with rename, overwrite, skip, cancel, applying one choice to remaining conflicts, and `Open LinkForge`. After a non-clean batch, confirm the lightweight summary dialog appears; after clicking `Open LinkForge`, confirm the same window expands into the full LinkForge interface instead of launching a second process.
 
 Remove the Windows 11 top-level context-menu entries after testing:
 
