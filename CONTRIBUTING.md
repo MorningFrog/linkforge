@@ -45,11 +45,11 @@ The shared context-menu launch protocol is:
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported GUI-opening actions are `symlink`, `hardlink`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Windows classic context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while drop actions use small message boxes for conflicts, errors, and completion before exiting without opening the Tauri window.
+Supported GUI-opening actions are `symlink`, `hardlink`, `link-count`, `siblings`, `scan-groups`, and `clone-tree`. Context-menu entries also use direct actions `pick-source`, `drop-symlink`, and `drop-hardlink`; `pick-source` succeeds silently, while Windows drop actions use small message boxes for conflicts, errors, and completion before exiting without opening the Tauri window.
 
 ### Context Menu Integration
 
-Windows Explorer context-menu entries have two installers. Use `scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1` for the Windows 11 top-level menu. Use `scripts/context-menu/windows/Register-LinkForgeContextMenu.ps1` for Windows 10 or the Windows 11 classic "Show more options" menu. GNOME Files scripts are installed by the `linkforge-context-menu-gnome` crate.
+Windows Explorer context-menu entries are installed with `scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1` for the Windows 11 top-level menu. GNOME Files advanced entries are installed by the `linkforge-context-menu-gnome` crate.
 
 #### Windows 11 Top-Level Menu
 
@@ -64,11 +64,11 @@ Start-Process explorer
 
 If a previous registration attempt appears stuck, stop it with `Ctrl+C` before rerunning the command.
 
-Explorer usually notices new per-user context-menu entries in newly opened windows. If the menu does not appear, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell. Do not use global registry hacks that force Windows 11 to always show the legacy context menu.
+Explorer usually notices new per-user context-menu entries in newly opened windows. If the menu does not appear, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell.
 
 If registration fails with `0x80073D2E`, check that the generated manifest contains `<uap10:AllowExternalContent>true</uap10:AllowExternalContent>`. Sparse packages registered with `-ExternalLocation` must explicitly allow external content.
 
-If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settings under `Settings > System > Advanced > Developer Mode`, then rerun the script. Windows requires Developer Mode or app sideloading to register the sparse package used by the Windows 11 top-level menu. Use the classic context-menu fallback if you do not want to enable Developer Mode.
+If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settings under `Settings > System > Advanced > Developer Mode`, then rerun the script. Windows requires Developer Mode or app sideloading to register the sparse package used by the Windows 11 top-level menu.
 
 If registration fails with `0x80070057` and says `x-generate` is not a valid language, update the modern registration script so the manifest uses a concrete resource language such as `en-us`.
 
@@ -83,28 +83,9 @@ powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unr
 Start-Process explorer
 ```
 
-#### Windows Classic Menu
-
-To locally test the classic Windows Explorer context menu:
-
-```powershell
-cargo build -p linkforge-gui
-powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/Register-LinkForgeContextMenu.ps1 -ExePath target/debug/linkforge-gui.exe
-Start-Process explorer
-```
-
-Remove the classic Windows Explorer context-menu entries after testing:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/Unregister-LinkForgeContextMenu.ps1
-Start-Process explorer
-```
-
-Use the same refresh approach after unregistering: check a newly opened Explorer window first, and restart Explorer only if stale menu entries remain.
-
 #### GNOME Files
 
-To locally test GNOME Files context-menu script installation:
+To locally test GNOME Files advanced context-menu extension installation:
 
 ```text
 cargo run -p linkforge-context-menu-gnome -- install
@@ -113,11 +94,13 @@ cargo run -p linkforge-context-menu-gnome -- uninstall
 
 Pass `--gui-exe /path/to/linkforge-gui` to `install` when `linkforge-gui` is not on `PATH`.
 
+The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautilus -q` after installing or uninstalling if the menu does not refresh.
+
 The compatibility wrappers under `scripts/context-menu/gnome` delegate to the GNOME context-menu crate:
 
 ```text
-scripts/context-menu/gnome/install-nautilus-scripts.sh
-scripts/context-menu/gnome/uninstall-nautilus-scripts.sh
+scripts/context-menu/gnome/install-gnome-extension.sh
+scripts/context-menu/gnome/uninstall-gnome-extension.sh
 ```
 
 ### Shell Completions

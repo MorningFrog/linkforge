@@ -23,10 +23,7 @@ Windows rejected sparse package registration because Developer Mode or app sidel
 Enable Developer Mode in Windows Settings:
   Settings > System > For developers > Developer Mode
 
-Then rerun this script. If you do not want to enable Developer Mode, use the classic context-menu fallback instead:
-  scripts/context-menu/windows/Register-LinkForgeContextMenu.ps1
-
-Classic entries appear under "Show more options" on Windows 11.
+Then rerun this script.
 "@
 }
 

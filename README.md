@@ -64,19 +64,31 @@ The GUI supports:
 - Hard-link group scanning for a directory tree.
 - Directory tree cloning while preserving internal hard-link relationships.
 
-The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, Windows 10 and the Windows 11 classic menu use registry-based entries, and GNOME Files uses Nautilus scripts.
+The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, and GNOME Files uses a `nautilus-python` extension.
 
 On Windows, the Explorer menu also supports a two-step link workflow: right-click a file or folder and choose `LinkForge > Pick Link Source`, then right-click a target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. The direct symlink and hard-link commands create the link without opening the full GUI. If a target name already exists, LinkForge asks whether to overwrite it, create an automatically renamed link, or cancel.
 
 For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
 
+### Context Menu Behavior
+
+LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu and launch `linkforge-gui --context-action <action> --paths <path>...`.
+
+| Target | Windows 11 modern | GNOME Files advanced |
+| --- | --- | --- |
+| File | `Pick Link Source`, `Open Symlink in LinkForge...`, `Open Hard Link in LinkForge...`, `Show Link Count`, `Find Hard Link Siblings...` | Same items under `LinkForge` |
+| Directory | `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Open Symlink in LinkForge...`, `Find Hard Link Siblings...`, `Scan Hard Link Groups`, `Clone Tree Preserving Hard Links...` | Same dynamic items under `LinkForge` |
+| Directory background | `Create Symlink from ...`, `Create Hard Link from ...` | Same dynamic items under `LinkForge` |
+
+Windows 11 modern can dynamically hide unsupported items and include the picked source name in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. On GNOME, direct drop actions automatically choose a renamed link when the default target name already exists instead of showing the Windows conflict dialog.
+
 ### Windows Explorer Context Menu
 
-Windows 11 top-level menu integration is implemented by `crates/linkforge-context-menu-windows`. It supports selected files, selected directories, and directory-background targets. The classic registry fallback appears under "Show more options" on Windows 11. LinkForge does not recommend globally restoring the legacy Windows context menu because that changes system-wide Explorer behavior.
+Windows 11 top-level menu integration is implemented by `crates/linkforge-context-menu-windows`. It supports selected files, selected directories, and directory-background targets.
 
 ### GNOME Files Context Menu
 
-GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`, which installs and removes LinkForge Nautilus scripts.
+GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`, which installs and removes the LinkForge `nautilus-python` extension. Nautilus scripts are not installed as a fallback.
 
 ## Platform Support
 
@@ -89,5 +101,5 @@ GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`,
 - `crates/linkforge-cli`: Command-line interface entry point.
 - `crates/linkforge-gui`: Graphical interface entry point.
 - `crates/linkforge-context-menu-windows`: Windows Explorer command extension for the Windows 11 top-level context menu.
-- `crates/linkforge-context-menu-gnome`: GNOME Files/Nautilus context-menu script installer.
-- `scripts/context-menu`: Compatibility wrappers and Windows registry/sparse-package entry points.
+- `crates/linkforge-context-menu-gnome`: GNOME Files/Nautilus `nautilus-python` context-menu extension installer.
+- `scripts/context-menu`: Compatibility wrappers and Windows sparse-package entry points.

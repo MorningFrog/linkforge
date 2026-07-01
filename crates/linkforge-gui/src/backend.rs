@@ -1,8 +1,6 @@
 use std::env;
-#[cfg(windows)]
 use std::fs;
 use std::io;
-#[cfg(windows)]
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,6 +24,7 @@ pub struct LaunchContext {
     pub paths: Vec<String>,
     pub platform: String,
     pub siblings_requires_root: bool,
+    pub background_target: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -85,6 +84,7 @@ impl LaunchContext {
         let mut action = None;
         let mut paths = Vec::new();
         let mut collecting_paths = false;
+        let mut background_target = false;
         let mut iter = args.into_iter().peekable();
 
         while let Some(arg) = iter.next() {
@@ -102,6 +102,10 @@ impl LaunchContext {
                     }
                     collecting_paths = false;
                 }
+                "--context-background" => {
+                    background_target = true;
+                    collecting_paths = false;
+                }
                 _ if collecting_paths => paths.push(arg),
                 _ => {}
             }
@@ -112,6 +116,7 @@ impl LaunchContext {
             paths,
             platform: env::consts::OS.to_string(),
             siblings_requires_root: cfg!(not(windows)),
+            background_target,
         }
     }
 }
@@ -121,7 +126,6 @@ pub fn initial_context(context: tauri::State<'_, LaunchContext>) -> LaunchContex
     context.inner().clone()
 }
 
-#[cfg(windows)]
 pub fn handle_direct_context_action(context: &LaunchContext) -> bool {
     match context.action.as_deref() {
         Some("pick-source") => {
@@ -135,57 +139,65 @@ pub fn handle_direct_context_action(context: &LaunchContext) -> bool {
             true
         }
         Some("drop-symlink") => {
-            invoke_drop_link(context.paths.first(), DirectLinkKind::Symlink);
+            invoke_drop_link(
+                &context.paths,
+                DirectLinkKind::Symlink,
+                context.background_target,
+            );
             true
         }
         Some("drop-hardlink") => {
-            invoke_drop_link(context.paths.first(), DirectLinkKind::Hardlink);
+            invoke_drop_link(
+                &context.paths,
+                DirectLinkKind::Hardlink,
+                context.background_target,
+            );
             true
         }
         _ => false,
     }
 }
 
-#[cfg(not(windows))]
-pub fn handle_direct_context_action(_context: &LaunchContext) -> bool {
-    false
-}
-
-#[cfg(windows)]
 #[derive(Clone, Copy)]
 enum DirectLinkKind {
     Symlink,
     Hardlink,
 }
 
-#[cfg(windows)]
 enum ConflictChoice {
     Overwrite,
     Rename,
     Cancel,
 }
 
-#[cfg(windows)]
-fn invoke_drop_link(target: Option<&String>, kind: DirectLinkKind) {
-    match drop_link(target.map(Path::new), kind) {
+fn invoke_drop_link(targets: &[String], kind: DirectLinkKind, background_target: bool) {
+    match drop_link(targets, kind, background_target) {
         Ok(Some(link)) => show_info(&format!("Created link:\n{}", link.display())),
         Ok(None) => {}
         Err(error) => show_error(&format!("Failed to create link:\n{error}")),
     }
 }
 
-#[cfg(windows)]
-fn drop_link(target: Option<&Path>, kind: DirectLinkKind) -> io::Result<Option<PathBuf>> {
+fn drop_link(
+    targets: &[String],
+    kind: DirectLinkKind,
+    background_target: bool,
+) -> io::Result<Option<PathBuf>> {
     let Some(source) = picked_source() else {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             "no link source has been picked",
         ));
     };
-    let Some(target_dir) = target.filter(|path| path.is_dir()) else {
+
+    let Some(target_dir) = direct_link_target_dir(targets, background_target) else {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,
-            "select a target directory or right-click a directory background",
+            format!(
+                "select a target directory or right-click a directory background. Received target paths: {}. Current directory: {}",
+                describe_targets(targets),
+                describe_current_dir()
+            ),
         ));
     };
 
@@ -208,7 +220,7 @@ fn drop_link(target: Option<&Path>, kind: DirectLinkKind) -> io::Result<Option<P
     if fs::symlink_metadata(&link).is_ok() {
         match ask_conflict(&link) {
             ConflictChoice::Overwrite => force = true,
-            ConflictChoice::Rename => link = available_link_path(target_dir, Path::new(file_name)),
+            ConflictChoice::Rename => link = available_link_path(&target_dir, Path::new(file_name)),
             ConflictChoice::Cancel => return Ok(None),
         }
     }
@@ -220,6 +232,35 @@ fn drop_link(target: Option<&Path>, kind: DirectLinkKind) -> io::Result<Option<P
     .map_err(link_error)?;
 
     Ok(Some(link))
+}
+
+fn direct_link_target_dir(targets: &[String], allow_current_dir: bool) -> Option<PathBuf> {
+    let target = targets
+        .iter()
+        .map(Path::new)
+        .find(|path| path.is_dir())
+        .map(Path::to_path_buf);
+    if target.is_some() {
+        return target;
+    }
+
+    allow_current_dir
+        .then(env::current_dir)
+        .and_then(Result::ok)
+        .filter(|path| path.is_dir())
+}
+
+fn describe_targets(targets: &[String]) -> String {
+    if targets.is_empty() {
+        return "<none>".to_string();
+    }
+    targets.join(", ")
+}
+
+fn describe_current_dir() -> String {
+    env::current_dir()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|error| format!("<unavailable: {error}>"))
 }
 
 #[cfg(windows)]
@@ -235,7 +276,11 @@ fn link_error(error: io::Error) -> io::Error {
     error
 }
 
-#[cfg(windows)]
+#[cfg(not(windows))]
+fn link_error(error: io::Error) -> io::Error {
+    error
+}
+
 fn pick_source(path: &Path) -> io::Result<()> {
     let state_path = picked_source_state_path();
     if let Some(parent) = state_path.parent() {
@@ -244,7 +289,6 @@ fn pick_source(path: &Path) -> io::Result<()> {
     fs::write(state_path, path.display().to_string())
 }
 
-#[cfg(windows)]
 fn picked_source() -> Option<PathBuf> {
     let value = fs::read_to_string(picked_source_state_path()).ok()?;
     let path = PathBuf::from(value.trim());
@@ -260,7 +304,20 @@ fn picked_source_state_path() -> PathBuf {
         .join("picked-source.txt")
 }
 
-#[cfg(windows)]
+#[cfg(not(windows))]
+fn picked_source_state_path() -> PathBuf {
+    env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".local").join("state"))
+        })
+        .unwrap_or_else(env::temp_dir)
+        .join("LinkForge")
+        .join("picked-source.txt")
+}
+
 fn available_link_path(target_dir: &Path, source_name: &Path) -> PathBuf {
     let stem = source_name
         .file_stem()
@@ -304,14 +361,29 @@ fn ask_conflict(path: &Path) -> ConflictChoice {
     }
 }
 
+#[cfg(not(windows))]
+fn ask_conflict(_path: &Path) -> ConflictChoice {
+    ConflictChoice::Rename
+}
+
 #[cfg(windows)]
 fn show_info(message: &str) {
     message_box(message, "LinkForge", MB_OK | MB_ICONINFORMATION);
 }
 
+#[cfg(not(windows))]
+fn show_info(message: &str) {
+    eprintln!("{message}");
+}
+
 #[cfg(windows)]
 fn show_error(message: &str) {
     message_box(message, "LinkForge", MB_OK | MB_ICONERROR);
+}
+
+#[cfg(not(windows))]
+fn show_error(message: &str) {
+    eprintln!("{message}");
 }
 
 #[cfg(windows)]
@@ -505,6 +577,49 @@ mod tests {
 
         assert_eq!(context.action.as_deref(), Some("link-count"));
         assert_eq!(context.paths, ["one.txt", "two.txt"]);
+        assert!(!context.background_target);
+    }
+
+    #[test]
+    fn parses_background_context_flag() {
+        let context = LaunchContext::from_args([
+            "--context-action".to_string(),
+            "drop-symlink".to_string(),
+            "--context-background".to_string(),
+            "--paths".to_string(),
+            "%V".to_string(),
+        ]);
+
+        assert_eq!(context.action.as_deref(), Some("drop-symlink"));
+        assert!(context.background_target);
+        assert_eq!(context.paths, ["%V"]);
+    }
+
+    #[test]
+    fn direct_link_target_dir_uses_first_existing_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("target");
+        let file = temp.path().join("file.txt");
+        fs::create_dir(&directory).unwrap();
+        fs::write(&file, "hello").unwrap();
+
+        let targets = vec![
+            "%V".to_string(),
+            file.display().to_string(),
+            "%W".to_string(),
+            directory.display().to_string(),
+        ];
+
+        assert_eq!(direct_link_target_dir(&targets, false), Some(directory));
+    }
+
+    #[test]
+    fn direct_link_target_dir_can_fall_back_to_current_dir_for_background_targets() {
+        let targets = vec!["%V".to_string(), "%1".to_string(), "%W".to_string()];
+        let current_dir = env::current_dir().unwrap();
+
+        assert_eq!(direct_link_target_dir(&targets, true), Some(current_dir));
+        assert_eq!(direct_link_target_dir(&targets, false), None);
     }
 
     #[test]

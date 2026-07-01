@@ -19,3 +19,12 @@ After changing code, AI agents should check whether related documentation needs 
 - `TODO.md`: Whether completed, postponed, or newly added tasks should be synchronized.
 - `AGENTS.md`: Whether AI collaboration workflow, conventions, or project guidance changed.
 - `CONTRIBUTING.md`: Whether contribution workflow, commit conventions, or development conventions changed.
+
+## Context Menu Sync
+
+When changing context-menu behavior, menu labels, action routing, installer scripts, or related documentation, AI agents must consider both supported menu integrations:
+
+- Windows 11 modern Explorer menu (`crates/linkforge-context-menu-windows` and `scripts/context-menu/windows/modern`).
+- GNOME Files advanced menu (`crates/linkforge-context-menu-gnome` and `scripts/context-menu/gnome`).
+
+Keep `README.md` synchronized with any intentional behavior differences between these menu integrations.
