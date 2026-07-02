@@ -127,12 +127,6 @@ impl LaunchContext {
                 "--paths" => {
                     collecting_paths = true;
                 }
-                "--path" => {
-                    if let Some(path) = iter.next() {
-                        paths.push(path);
-                    }
-                    collecting_paths = false;
-                }
                 "--context-background" => {
                     background_target = true;
                     collecting_paths = false;
@@ -615,14 +609,6 @@ fn reveal_path_inner(path: &Path) -> io::Result<()> {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let status = Command::new("open").arg("-R").arg(path).status()?;
-        if status.success() {
-            return Ok(());
-        }
-    }
-
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         let target = path.parent().unwrap_or(path);
@@ -746,23 +732,21 @@ mod tests {
     }
 
     #[test]
-    fn pick_sources_writes_json_and_legacy_state() {
+    fn pick_sources_writes_json_state() {
         let temp = tempfile::tempdir().unwrap();
         let state_path = temp.path().join("picked-sources.json");
-        let legacy_path = temp.path().join("picked-source.txt");
         let paths = vec!["one.txt".to_string(), "two.txt".to_string()];
 
-        linkforge_shared::pick_sources_at(&paths, &state_path, &legacy_path).unwrap();
+        linkforge_shared::pick_sources_at(&paths, &state_path).unwrap();
 
         assert_eq!(
             serde_json::from_str::<Vec<String>>(&fs::read_to_string(state_path).unwrap()).unwrap(),
             paths
         );
-        assert_eq!(fs::read_to_string(legacy_path).unwrap(), "one.txt");
     }
 
     #[test]
-    fn picked_sources_prefers_json_and_falls_back_to_legacy() {
+    fn picked_sources_reads_json_without_legacy_fallback() {
         let temp = tempfile::tempdir().unwrap();
         let state_path = temp.path().join("picked-sources.json");
         let legacy_path = temp.path().join("picked-source.txt");
@@ -772,24 +756,24 @@ mod tests {
         fs::write(&first, "first").unwrap();
         fs::write(&second, "second").unwrap();
         fs::write(&legacy, "legacy").unwrap();
+        fs::write(&legacy_path, legacy.display().to_string()).unwrap();
+
+        assert!(linkforge_shared::read_picked_sources_from(&state_path).is_empty());
+
         fs::write(
             &state_path,
             serde_json::to_string(&[first.display().to_string(), second.display().to_string()])
                 .unwrap(),
         )
         .unwrap();
-        fs::write(&legacy_path, legacy.display().to_string()).unwrap();
 
         assert_eq!(
-            linkforge_shared::read_picked_sources_from(&state_path, &legacy_path),
+            linkforge_shared::read_picked_sources_from(&state_path),
             vec![first.clone(), second]
         );
 
         fs::write(&state_path, "not json").unwrap();
-        assert_eq!(
-            linkforge_shared::read_picked_sources_from(&state_path, &legacy_path),
-            vec![legacy]
-        );
+        assert!(linkforge_shared::read_picked_sources_from(&state_path).is_empty());
     }
 
     #[test]

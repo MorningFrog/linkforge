@@ -40,14 +40,10 @@ pub fn pick_sources(paths: &[String]) -> io::Result<()> {
         }
     }
 
-    pick_sources_at(
-        paths,
-        &picked_sources_state_path(),
-        &picked_source_state_path(),
-    )
+    pick_sources_at(paths, &picked_sources_state_path())
 }
 
-pub fn pick_sources_at(paths: &[String], state_path: &Path, legacy_path: &Path) -> io::Result<()> {
+pub fn pick_sources_at(paths: &[String], state_path: &Path) -> io::Result<()> {
     if paths.is_empty() {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,
@@ -61,30 +57,18 @@ pub fn pick_sources_at(paths: &[String], state_path: &Path, legacy_path: &Path) 
     fs::write(
         state_path,
         serde_json::to_string(paths).map_err(io::Error::other)?,
-    )?;
-    if let Some(parent) = legacy_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(legacy_path, paths[0].as_str())
+    )
 }
 
 pub fn picked_sources() -> Vec<PathBuf> {
-    read_picked_sources_from(&picked_sources_state_path(), &picked_source_state_path())
+    read_picked_sources_from(&picked_sources_state_path())
 }
 
-pub fn read_picked_sources_from(state_path: &Path, legacy_path: &Path) -> Vec<PathBuf> {
-    if let Ok(value) = fs::read_to_string(state_path)
-        && let Ok(paths) = serde_json::from_str::<Vec<String>>(&value)
-    {
-        let paths = existing_paths(paths);
-        if !paths.is_empty() {
-            return paths;
-        }
-    }
-
-    fs::read_to_string(legacy_path)
+pub fn read_picked_sources_from(state_path: &Path) -> Vec<PathBuf> {
+    fs::read_to_string(state_path)
         .ok()
-        .map(|value| existing_paths([value.trim().to_string()]))
+        .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
+        .map(existing_paths)
         .unwrap_or_default()
 }
 
@@ -119,10 +103,6 @@ pub fn picked_source_state_dir() -> PathBuf {
 
 pub fn picked_sources_state_path() -> PathBuf {
     picked_source_state_dir().join("picked-sources.json")
-}
-
-pub fn picked_source_state_path() -> PathBuf {
-    picked_source_state_dir().join("picked-source.txt")
 }
 
 pub fn pick_source_title(count: u32, first_name: Option<&str>) -> String {
@@ -170,23 +150,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pick_sources_writes_json_and_legacy_state() {
+    fn pick_sources_writes_json_state() {
         let temp = tempfile::tempdir().unwrap();
         let state_path = temp.path().join("picked-sources.json");
-        let legacy_path = temp.path().join("picked-source.txt");
         let paths = vec!["one.txt".to_string(), "two.txt".to_string()];
 
-        pick_sources_at(&paths, &state_path, &legacy_path).unwrap();
+        pick_sources_at(&paths, &state_path).unwrap();
 
         assert_eq!(
             serde_json::from_str::<Vec<String>>(&fs::read_to_string(state_path).unwrap()).unwrap(),
             paths
         );
-        assert_eq!(fs::read_to_string(legacy_path).unwrap(), "one.txt");
     }
 
     #[test]
-    fn picked_sources_prefers_json_and_falls_back_to_legacy() {
+    fn picked_sources_reads_json_without_legacy_fallback() {
         let temp = tempfile::tempdir().unwrap();
         let state_path = temp.path().join("picked-sources.json");
         let legacy_path = temp.path().join("picked-source.txt");
@@ -196,24 +174,24 @@ mod tests {
         fs::write(&first, "first").unwrap();
         fs::write(&second, "second").unwrap();
         fs::write(&legacy, "legacy").unwrap();
+        fs::write(&legacy_path, legacy.display().to_string()).unwrap();
+
+        assert!(read_picked_sources_from(&state_path).is_empty());
+
         fs::write(
             &state_path,
             serde_json::to_string(&[first.display().to_string(), second.display().to_string()])
                 .unwrap(),
         )
         .unwrap();
-        fs::write(&legacy_path, legacy.display().to_string()).unwrap();
 
         assert_eq!(
-            read_picked_sources_from(&state_path, &legacy_path),
+            read_picked_sources_from(&state_path),
             vec![first.clone(), second]
         );
 
         fs::write(&state_path, "not json").unwrap();
-        assert_eq!(
-            read_picked_sources_from(&state_path, &legacy_path),
-            vec![legacy]
-        );
+        assert!(read_picked_sources_from(&state_path).is_empty());
     }
 
     #[test]
@@ -236,7 +214,6 @@ mod tests {
     fn state_paths_use_linkforge_dir() {
         assert!(picked_source_state_dir().ends_with("LinkForge"));
         assert!(picked_sources_state_path().ends_with("picked-sources.json"));
-        assert!(picked_source_state_path().ends_with("picked-source.txt"));
     }
 
     #[test]

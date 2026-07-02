@@ -24,6 +24,13 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 - File-manager quick actions for inspecting links, comparing two files, picking link sources, and creating links in a target folder.
 - Lightweight GUI dialogs for file-manager results, conflicts, warnings, and errors.
 
+### Cleanup
+
+- Removed legacy picked-source single-file state compatibility; context-menu picks now only use `picked-sources.json`.
+- Removed the undocumented GUI `--path` context-launch alias; use `--paths` for all file-manager launches.
+- Removed GNOME wrapper scripts in favor of the `linkforge-context-menu-gnome` installer commands.
+- Removed the non-target macOS reveal branch from the GUI backend.
+
 ### Platform Notes
 
 - Core link management and the CLI support Windows and Linux.

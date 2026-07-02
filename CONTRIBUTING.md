@@ -122,13 +122,6 @@ The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautil
 After installing, select exactly two files in GNOME Files to test `Compare Same File` from the LinkForge advanced menu.
 Also test selecting multiple files or folders, choosing `Pick N Link Sources`, and dropping them into one target folder with `Create Symlink...` or `Create Hard Link...`. Clean drops should exit silently. If a target name already exists or a non-clean result occurs, confirm the lightweight Tauri-rendered dialog matches the Windows flow.
 
-The compatibility wrappers under `scripts/context-menu/gnome` delegate to the GNOME context-menu crate:
-
-```text
-scripts/context-menu/gnome/install-gnome-extension.sh
-scripts/context-menu/gnome/uninstall-gnome-extension.sh
-```
-
 ### Shell Completions
 
 To manually test the installed CLI and PowerShell completions on Windows:

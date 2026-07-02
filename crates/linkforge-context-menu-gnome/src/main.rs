@@ -440,10 +440,6 @@ from gi.repository import GObject, Nautilus
 GUI_EXE = os.environ.get("LINKFORGE_GUI", __LINKFORGE_GUI_EXE__)
 
 
-def _picked_source_state_path():
-    return os.path.join(_picked_source_state_dir(), "picked-source.txt")
-
-
 def _picked_sources_state_path():
     return os.path.join(_picked_source_state_dir(), "picked-sources.json")
 
@@ -465,18 +461,9 @@ def _picked_sources():
         with open(_picked_sources_state_path(), "r", encoding="utf-8") as handle:
             paths = json.load(handle)
         if isinstance(paths, list):
-            existing = _existing_paths([path for path in paths if isinstance(path, str)])
-            if existing:
-                return existing
+            return _existing_paths([path for path in paths if isinstance(path, str)])
     except (OSError, ValueError):
-        pass
-
-    try:
-        with open(_picked_source_state_path(), "r", encoding="utf-8") as handle:
-            path = handle.read().strip()
-    except OSError:
         return []
-    return _existing_paths([path])
 
 
 def _picked_source_label(kind, picked):
@@ -621,6 +608,7 @@ mod tests {
         assert!(extension.contains("/opt/linkforge/linkforge-gui"));
         assert!(extension.contains("--context-action"));
         assert!(extension.contains("picked-sources.json"));
+        assert!(!extension.contains("picked-source.txt"));
         assert!(extension.contains("Pick {len(paths)} Link Sources"));
         assert!(extension.contains("Create Hard-Link Tree"));
         assert!(extension.contains("same-file"));

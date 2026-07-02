@@ -114,4 +114,4 @@ GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`,
 - `crates/linkforge-gui`: Graphical interface entry point.
 - `crates/linkforge-context-menu-windows`: Windows Explorer command extension for the Windows 11 top-level context menu.
 - `crates/linkforge-context-menu-gnome`: GNOME Files/Nautilus `nautilus-python` context-menu extension installer.
-- `scripts/context-menu`: Compatibility wrappers and Windows sparse-package entry points.
+- `scripts/context-menu/windows/modern`: Windows sparse-package registration scripts.
