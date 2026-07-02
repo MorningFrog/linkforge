@@ -1,1 +1,6 @@
 /target
+
+# syncthing files
+.stignore
+.stfolder/
+*sync*conflict*
