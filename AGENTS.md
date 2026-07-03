@@ -38,3 +38,7 @@ When making changes that do **not** affect public API compatibility, remove outd
 When a change may affect API compatibility, stop and ask the user how to proceed. If the user explicitly says that breaking compatibility is acceptable, do not retain any deprecated APIs, legacy behavior, or compatibility fallbacks. Implement the clean new design directly.
 
 Fallbacks should only be kept when they are explicitly required for a known, current compatibility target or when the user asks for them. Avoid speculative compatibility code.
+
+## Markdown Formatting
+
+When writing or editing Markdown files, keep normal prose and list items on a single line unless a hard line break is semantically required. In Markdown, a single newline usually renders like a space, so avoid inserting visual-wrap line breaks in paragraphs, bullets, or similar text. Preserve intentional structure such as blank lines between paragraphs, code blocks, tables, and explicit line breaks.
