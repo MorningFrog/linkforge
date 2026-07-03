@@ -25,6 +25,7 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 - GNOME Files advanced context-menu integration through `nautilus-python`.
 - GNOME Files integration supports Nautilus GI 4.0 and 3.0, including Ubuntu 22.04 / Nautilus 42.
 - File-manager quick actions for inspecting links, comparing two files, picking link sources, and creating links in a target folder.
+- Fixed GNOME Files selected-folder and background drop actions by writing picked-source state directly from the extension and falling back to path-based directory checks when Nautilus metadata is incomplete.
 - Lightweight GUI dialogs for file-manager results, conflicts, warnings, and errors.
 
 ### Release Preparation

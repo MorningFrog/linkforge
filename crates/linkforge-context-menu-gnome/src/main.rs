@@ -410,6 +410,19 @@ fn verify_extension_contents(contents: &str, gui_exe: &str) -> io::Result<()> {
         ));
     }
 
+    for marker in [
+        "def _pick_sources(paths):",
+        "if _pick_sources(paths):",
+        "def _file_is_directory(file_info, path):",
+    ] {
+        if !contents.contains(marker) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("extension does not contain required marker {marker:?}"),
+            ));
+        }
+    }
+
     let configured_gui = python_string(gui_exe);
     if !contents.contains(&configured_gui) {
         return Err(io::Error::new(
@@ -481,6 +494,18 @@ def _picked_sources():
         return []
 
 
+def _pick_sources(paths):
+    if not paths or len(_existing_paths(paths)) != len(paths):
+        return False
+    state_path = _picked_sources_state_path()
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    temporary_path = f"{state_path}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
+        json.dump(paths, handle)
+    os.replace(temporary_path, state_path)
+    return True
+
+
 def _picked_source_label(kind, picked):
     if not picked:
         return f"Create {kind} from Picked Source"
@@ -496,6 +521,15 @@ def _picked_source_label(kind, picked):
 def _file_path(file_info):
     location = file_info.get_location()
     return location.get_path() if location else None
+
+
+def _file_is_directory(file_info, path):
+    try:
+        if file_info.is_directory():
+            return True
+    except (AttributeError, TypeError):
+        pass
+    return bool(path and os.path.isdir(path))
 
 
 def _first_name(paths):
@@ -525,7 +559,7 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
             return []
 
         first = files[0]
-        first_is_dir = first.is_directory()
+        first_is_dir = _file_is_directory(first, paths[0])
         picked = _picked_sources()
         items = []
 
@@ -541,7 +575,7 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
             items.append(self._action_item("drop-symlink", _picked_source_label("Symlink", picked), "drop-symlink", [paths[0]]))
             items.append(self._action_item("drop-hardlink", _picked_source_label("Hard Link", picked), "drop-hardlink", [paths[0]]))
 
-        if len(files) == 2 and len(paths) == 2 and all(not file_info.is_directory() for file_info in files):
+        if len(files) == 2 and len(paths) == 2 and all(not _file_is_directory(file_info, path) for file_info, path in zip(files, paths)):
             items.append(self._action_item("same-file", "Compare Same File", "same-file", paths))
 
         if len(paths) == 1:
@@ -591,6 +625,12 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         return item
 
     def _activate(self, _menu, action, paths, background):
+        if action == "pick-source":
+            try:
+                if _pick_sources(paths):
+                    return
+            except OSError:
+                pass
         _run_action(action, paths, background)
 "#;
 
@@ -625,6 +665,15 @@ mod tests {
         assert!(extension.contains("--context-action"));
         assert!(extension.contains("picked-sources.json"));
         assert!(!extension.contains("picked-source.txt"));
+        assert!(extension.contains("def _pick_sources(paths):"));
+        assert!(extension.contains("json.dump(paths, handle)"));
+        assert!(extension.contains("os.replace(temporary_path, state_path)"));
+        assert!(extension.contains("return True"));
+        assert!(extension.contains("if action == \"pick-source\":"));
+        assert!(extension.contains("if _pick_sources(paths):"));
+        assert!(extension.contains("def _file_is_directory(file_info, path):"));
+        assert!(extension.contains("os.path.isdir(path)"));
+        assert!(extension.contains("first_is_dir = _file_is_directory(first, paths[0])"));
         assert!(extension.contains("Pick {len(paths)} Link Sources"));
         assert!(extension.contains("Create Hard-Link Tree"));
         assert!(extension.contains("same-file"));
@@ -704,6 +753,11 @@ mod tests {
         verify_extension_contents(&extension, "/opt/linkforge/linkforge-gui").unwrap();
 
         let error = verify_extension_contents(&extension, "/other/linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        let old_extension = extension.replace("def _pick_sources(paths):", "def _old_pick(paths):");
+        let error =
+            verify_extension_contents(&old_extension, "/opt/linkforge/linkforge-gui").unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }

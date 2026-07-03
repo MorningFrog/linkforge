@@ -44,14 +44,14 @@ cargo run -p linkforge-gui -- --context-action link-count --paths path/to/file
 cargo run -p linkforge-gui -- --context-action same-file --paths path/to/a path/to/b
 ```
 
-The shared context-menu launch protocol is:
+The shared context-menu launch protocol for GUI-opening actions is:
 
 ```bash
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations.
-Context-menu entries only launch the GUI and pass context; picked-source state, action names, and menu labels are shared through `linkforge-shared`, while actual batch link preflight and creation are handled by `linkforge-core`.
+Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. GNOME Files writes picked-source state directly from the `nautilus-python` extension so follow-up menus can update without waiting on a hidden GUI launch. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations.
+Apart from GNOME's direct `pick-source` state write, context-menu entries only launch the GUI and pass context; picked-source state, action names, and menu labels are shared through `linkforge-shared`, while actual batch link preflight and creation are handled by `linkforge-core`.
 
 ### Context Menu Integration
 
@@ -67,10 +67,7 @@ integration:
 cargo build -p linkforge-gui
 ```
 
-Windows Explorer context-menu entries are installed with
-`scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1`
-for the Windows 11 top-level menu. GNOME Files advanced entries are installed by
-the `linkforge-context-menu-gnome` crate.
+Windows Explorer context-menu entries are installed with `scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1` for the Windows 11 top-level menu. GNOME Files advanced entries are installed by the `linkforge-context-menu-gnome` crate.
 
 #### Windows 11 Top-Level Menu
 

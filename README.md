@@ -80,7 +80,7 @@ For local development, context-menu registration, and manual testing commands, s
 
 ### Context Menu Behavior
 
-LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu and launch `linkforge-gui --context-action <action> --paths <path>...`.
+LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu. GUI-opening actions launch `linkforge-gui --context-action <action> --paths <path>...`; GNOME Files writes picked-source state directly for `Pick Link Source` so follow-up menu labels update without waiting on a hidden GUI launch.
 Both integrations show `Compare Same File` when exactly two files are selected; this opens the Inspect view and runs the same-file comparison automatically.
 
 | Target | Windows 11 modern | GNOME Files advanced |
