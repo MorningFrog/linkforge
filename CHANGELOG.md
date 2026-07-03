@@ -15,6 +15,7 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 
 - Command-line interface for link creation, inspection, batch operations, hard-link-preserving clones, help output, and shell completion generation.
 - Tauri desktop GUI for the main LinkForge workflows.
+- GUI hard-link sibling lookup now hides scan-root controls on Windows and requires or prefills scan roots on platforms that need directory scanning.
 - Native system dialogs for GUI path selection.
 - Cross-platform CI gate for formatting, tests, and clippy on Windows and Linux.
 - Release version sync now covers workspace manifests, Tauri GUI version metadata, and the Windows sparse-package manifest version.

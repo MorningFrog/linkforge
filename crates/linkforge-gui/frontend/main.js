@@ -94,6 +94,69 @@ function isLightweightAction(action) {
   );
 }
 
+function siblingsRequiresRoot() {
+  return state.launch?.siblingsRequiresRoot !== false;
+}
+
+function parentPathForScanRoot(path) {
+  const value = (path || "").trim();
+  if (!value) return "";
+
+  const trimmed = value.replace(/[\\/]+$/, "");
+  if (!trimmed) {
+    return value.startsWith("/") || value.startsWith("\\") ? value[0] : ".";
+  }
+
+  const lastSeparator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  if (lastSeparator < 0) return ".";
+  if (lastSeparator === 0) return trimmed.slice(0, 1);
+  if (/^[A-Za-z]:[\\/]/.test(trimmed) && lastSeparator === 2) {
+    return trimmed.slice(0, 3);
+  }
+  return trimmed.slice(0, lastSeparator);
+}
+
+function prefillSiblingsRoot(pathInputId, rootInputId) {
+  if (!siblingsRequiresRoot()) return null;
+
+  const existingRoot = inputValue(rootInputId);
+  if (existingRoot) return existingRoot;
+
+  const root = parentPathForScanRoot(inputValue(pathInputId));
+  if (root) {
+    setInput(rootInputId, root);
+  }
+  return root;
+}
+
+function siblingsCommandArgs(pathInputId, rootInputId, label) {
+  const path = requireField(pathInputId, label);
+  if (!siblingsRequiresRoot()) {
+    return { path, root: null };
+  }
+
+  const root = prefillSiblingsRoot(pathInputId, rootInputId);
+  if (!root) {
+    throw new Error("Scan root is required.");
+  }
+  return { path, root };
+}
+
+function syncSiblingsRootUi() {
+  const requiresRoot = siblingsRequiresRoot();
+  document.querySelectorAll(".quick-siblings-only").forEach((el) => {
+    el.classList.toggle("hidden", !(state.mode === "siblings" && requiresRoot));
+  });
+  document.querySelectorAll(".inspect-siblings-root-field").forEach((el) => {
+    el.classList.toggle("hidden", !requiresRoot);
+  });
+
+  if (!requiresRoot) {
+    setInput("quick-root", "");
+    setInput("inspect-root", "");
+  }
+}
+
 function enterLightweightMode() {
   state.lightweightMode = true;
   state.fullWindowOpen = false;
@@ -443,9 +506,7 @@ function applyQuickMode(mode) {
   document.querySelectorAll(".quick-force-only").forEach((el) => {
     el.classList.toggle("hidden", !config.needsForce);
   });
-  document.querySelectorAll(".quick-siblings-only").forEach((el) => {
-    el.classList.toggle("hidden", !config.needsRoot);
-  });
+  syncSiblingsRootUi();
 }
 
 async function choosePath(target, options) {
@@ -462,6 +523,11 @@ async function choosePath(target, options) {
         });
     if (typeof value === "string" && value) {
       setInput(target, value);
+      if (target === "quick-source") {
+        prefillSiblingsRoot("quick-source", "quick-root");
+      } else if (target === "inspect-path") {
+        prefillSiblingsRoot("inspect-path", "inspect-root");
+      }
     }
   } catch (error) {
     displayError(error);
@@ -731,21 +797,21 @@ async function handleQuickSubmit(event) {
   event.preventDefault();
   const config = quickModes[state.mode];
   try {
-    const source = requireField("quick-source", "Source");
-    const args = { source };
+    let args;
+    if (state.mode === "siblings") {
+      args = siblingsCommandArgs("quick-source", "quick-root", "Source");
+    } else {
+      const source = requireField("quick-source", "Source");
+      args = { source };
 
-    if (config.needsLink) {
-      args.link = requireField("quick-link", "Link path");
-      args.force = byId("quick-force").checked;
-    }
-    if (config.needsRoot) {
-      args.path = source;
-      args.root = inputValue("quick-root") || null;
-      delete args.source;
-    }
-    if (state.mode === "link-count") {
-      args.path = source;
-      delete args.source;
+      if (config.needsLink) {
+        args.link = requireField("quick-link", "Link path");
+        args.force = byId("quick-force").checked;
+      }
+      if (state.mode === "link-count") {
+        args.path = source;
+        delete args.source;
+      }
     }
 
     await runCommand(config.command, args, (result) => {
@@ -798,11 +864,8 @@ async function handleMenuAction(action) {
   if (action === "siblings") {
     switchView("inspect");
     setInput("inspect-path", path);
-    await runCommand(
-      "siblings",
-      { path, root: inputValue("inspect-root") || null },
-      (result) => resultPaths(result.paths),
-    );
+    const args = siblingsCommandArgs("inspect-path", "inspect-root", "Path");
+    await runCommand("siblings", args, (result) => resultPaths(result.paths));
   }
 }
 
@@ -822,7 +885,10 @@ async function loadInitialContext() {
       setInput("inspect-path", context.paths[0]);
       setInput("groups-root", context.paths[0]);
       setInput("clone-source", context.paths[0]);
+      prefillSiblingsRoot("quick-source", "quick-root");
+      prefillSiblingsRoot("inspect-path", "inspect-root");
     }
+    syncSiblingsRootUi();
 
     if (isLightweightAction(context.action)) {
       enterLightweightMode();
@@ -909,12 +975,8 @@ function bindEvents() {
   });
   byId("inspect-siblings").addEventListener("click", async () => {
     try {
-      const path = requireField("inspect-path", "Path");
-      await runCommand(
-        "siblings",
-        { path, root: inputValue("inspect-root") || null },
-        (result) => resultPaths(result.paths),
-      );
+      const args = siblingsCommandArgs("inspect-path", "inspect-root", "Path");
+      await runCommand("siblings", args, (result) => resultPaths(result.paths));
     } catch (error) {
       displayError(error);
     }
@@ -975,5 +1037,6 @@ function bindEvents() {
 
 bindEvents();
 applyQuickMode("symlink");
+syncSiblingsRootUi();
 setResults([]);
 loadInitialContext();

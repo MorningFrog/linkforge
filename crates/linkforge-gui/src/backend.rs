@@ -641,6 +641,7 @@ mod tests {
 
         assert_eq!(context.action.as_deref(), Some("link-count"));
         assert_eq!(context.paths, ["one.txt", "two.txt"]);
+        assert_eq!(context.siblings_requires_root, cfg!(not(windows)));
         assert!(!context.background_target);
     }
 
