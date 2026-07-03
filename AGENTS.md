@@ -42,3 +42,73 @@ Fallbacks should only be kept when they are explicitly required for a known, cur
 ## Markdown Formatting
 
 When writing or editing Markdown files, keep normal prose and list items on a single line unless a hard line break is semantically required. In Markdown, a single newline usually renders like a space, so avoid inserting visual-wrap line breaks in paragraphs, bullets, or similar text. Preserve intentional structure such as blank lines between paragraphs, code blocks, tables, and explicit line breaks.
+
+## Windows PowerShell: Prefer Scripts Over Complex Inline Commands
+
+When operating in a native Windows environment, use PowerShell only for simple command invocation and orchestration. Do not spend time constructing or debugging complex inline PowerShell expressions.
+
+Simple commands may be executed directly, for example:
+
+```powershell
+git status --short
+cargo fmt --check
+cargo test
+Get-ChildItem src
+```
+
+Use an existing repository script, or create a temporary `.ps1` script, whenever a command involves any of the following:
+
+* Nested or escaped quotes
+* Multiline strings
+* Embedded JSON, TOML, YAML, XML, source code, or regular expressions
+* Multiple pipelines or redirections
+* Complex environment-variable expansion
+* Dynamic construction of native-process arguments
+* Paths or arguments that require nontrivial escaping
+* PowerShell invoking another shell such as `cmd.exe`, Bash, or WSL
+* A command that has already failed because of quoting or parsing
+
+Run PowerShell scripts with a simple invocation:
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File path\to\script.ps1
+```
+
+When Windows PowerShell rather than PowerShell 7 is required, use:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -NonInteractive -File path\to\script.ps1
+```
+
+Inside PowerShell scripts:
+
+* Pass native-process arguments as arrays rather than constructing a command string.
+* Invoke native programs with the call operator `&`.
+* Check `$LASTEXITCODE` after native-process execution.
+* Use `try`/`finally` when temporary files or directories require cleanup.
+* Prefer files or standard input for transferring complex structured data.
+* Prefer repository-provided task scripts over newly generated scripts.
+* Keep temporary agent scripts under `.agent-tmp/` and remove them after successful or failed execution unless they are useful as permanent project tooling.
+
+Example:
+
+```powershell
+$arguments = @(
+    "test"
+    "--workspace"
+    "--all-features"
+)
+
+& cargo @arguments
+
+if ($LASTEXITCODE -ne 0) {
+    throw "cargo failed with exit code $LASTEXITCODE"
+}
+```
+
+Do not use `Invoke-Expression` to execute generated command strings.
+
+Do not wrap a complex command in `cmd.exe /c`, `bash -lc`, `wsl.exe ...`, or another nested shell merely to avoid PowerShell syntax. This adds another parsing layer and usually makes quoting less reliable. Calling an existing `.cmd`, `.sh`, or WSL-side script is acceptable when the invocation itself remains simple.
+
+When a complex inline command fails because of parsing or quoting, do not repeatedly attempt alternate escaping forms. Move the operation into a script immediately and continue working on the actual task.
+
