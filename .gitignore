@@ -1,4 +1,6 @@
 /target
+/vendor
+/.cargo
 
 # syncthing files
 .stignore

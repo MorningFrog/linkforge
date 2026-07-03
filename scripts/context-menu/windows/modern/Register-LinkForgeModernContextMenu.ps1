@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $PackageName = "LinkForge.ContextMenu"
+$SparsePackageVersion = "0.1.0.0"
 $StagedGuiExeName = "linkforge-gui.exe"
 $StagedShellExtDllName = "linkforge_context_menu_windows.dll"
 
@@ -234,7 +235,7 @@ $manifest = @"
   xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   IgnorableNamespaces="uap uap10 rescap desktop4 desktop5 com">
-  <Identity Name="LinkForge.ContextMenu" Publisher="CN=LinkForge" Version="0.1.0.0" ProcessorArchitecture="x64" />
+  <Identity Name="LinkForge.ContextMenu" Publisher="CN=LinkForge" Version="$SparsePackageVersion" ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>LinkForge</DisplayName>
     <PublisherDisplayName>LinkForge</PublisherDisplayName>

@@ -16,6 +16,10 @@ if ($Version -notmatch $semverPattern) {
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $rootManifest = Join-Path $repoRoot "Cargo.toml"
+$tauriConfig = Join-Path $repoRoot "crates/linkforge-gui/tauri.conf.json"
+$windowsRegisterScript = Join-Path $repoRoot "scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1"
+$versionMatch = [regex]::Match($Version, '^([0-9]+)\.([0-9]+)\.([0-9]+)')
+$sparsePackageVersion = "$($versionMatch.Groups[1].Value).$($versionMatch.Groups[2].Value).$($versionMatch.Groups[3].Value).0"
 
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     throw "cargo was not found in PATH."
@@ -47,7 +51,26 @@ try {
     $packageNames = @($workspacePackages | ForEach-Object { [regex]::Escape([string]$_.name) })
     $localDependencyPattern = "(?m)^(\s*(?:$($packageNames -join '|'))\s*=\s*\{[^\r\n]*\bpath\s*=[^\r\n]*\})"
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    $changedManifests = New-Object System.Collections.Generic.List[string]
+    $changedFiles = New-Object System.Collections.Generic.List[string]
+
+    function Update-TextFile {
+        param(
+            [string] $Path,
+            [string] $Updated
+        )
+
+        $content = [System.IO.File]::ReadAllText($Path)
+        if ($Updated -eq $content) {
+            return
+        }
+
+        $relativePath = Resolve-Path -Relative $Path
+        [void]$changedFiles.Add($relativePath)
+
+        if (-not $DryRun) {
+            [System.IO.File]::WriteAllText($Path, $Updated, $utf8NoBom)
+        }
+    }
 
     foreach ($package in $workspacePackages) {
         $manifestPath = [string]$package.manifest_path
@@ -74,21 +97,34 @@ try {
         )
 
         if ($updated -ne $content) {
-            $relativePath = Resolve-Path -Relative $manifestPath
-            [void]$changedManifests.Add($relativePath)
-
-            if (-not $DryRun) {
-                [System.IO.File]::WriteAllText($manifestPath, $updated, $utf8NoBom)
-            }
+            Update-TextFile -Path $manifestPath -Updated $updated
         }
     }
 
-    if ($changedManifests.Count -eq 0) {
-        Write-Host "All workspace manifests already use version $Version."
+    $tauriContent = [System.IO.File]::ReadAllText($tauriConfig)
+    $updatedTauri = [regex]::Replace(
+        $tauriContent,
+        '("version"\s*:\s*)"[^"]+"',
+        "`${1}`"$Version`"",
+        1
+    )
+    Update-TextFile -Path $tauriConfig -Updated $updatedTauri
+
+    $windowsRegisterContent = [System.IO.File]::ReadAllText($windowsRegisterScript)
+    $updatedWindowsRegister = [regex]::Replace(
+        $windowsRegisterContent,
+        '(?m)^(\$SparsePackageVersion\s*=\s*)"[^"]+"',
+        "`${1}`"$sparsePackageVersion`"",
+        1
+    )
+    Update-TextFile -Path $windowsRegisterScript -Updated $updatedWindowsRegister
+
+    if ($changedFiles.Count -eq 0) {
+        Write-Host "All release version files already use version $Version."
     } else {
         $mode = if ($DryRun) { "Would update" } else { "Updated" }
-        foreach ($manifest in $changedManifests) {
-            Write-Host "$mode $manifest"
+        foreach ($file in $changedFiles) {
+            Write-Host "$mode $file"
         }
     }
 

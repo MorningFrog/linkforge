@@ -25,7 +25,7 @@ After changing code, AI agents should check whether related documentation needs 
 When changing context-menu behavior, menu labels, action routing, installer scripts, or related documentation, AI agents must consider both supported menu integrations:
 
 - Windows 11 modern Explorer menu (`crates/linkforge-context-menu-windows` and `scripts/context-menu/windows/modern`).
-- GNOME Files advanced menu (`crates/linkforge-context-menu-gnome` and `scripts/context-menu/gnome`).
+- GNOME Files advanced menu (`crates/linkforge-context-menu-gnome`).
 
 Keep `README.md` synchronized with any intentional behavior differences between these menu integrations.
 

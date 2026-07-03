@@ -15,6 +15,8 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt
 ```
 
+CI runs `cargo fmt -- --check`, `cargo test`, and `cargo clippy --all-targets -- -D warnings` on Windows and Linux.
+
 ### CLI
 
 Run the CLI locally with `cargo run -p linkforge-cli --` followed by a LinkForge command:
@@ -157,6 +159,12 @@ Batch commands run the same core preflight used by GUI file-manager drops. The d
 Before submitting changes, run `cargo fmt`, `cargo test`, and `cargo clippy --all-targets -- -D warnings`.
 
 On Windows, symbolic link creation without administrator privileges requires Windows Developer Mode. LinkForge asks Windows to allow unprivileged symlink creation, but Windows still rejects the request when Developer Mode is disabled and the process is not elevated. Tests account for missing symlink privileges, but manual symlink commands can still fail with the operating system permission error.
+
+### Release Preparation
+
+Use `scripts/set-version.ps1 <version>` or `scripts/set-version.sh <version>` to update workspace Cargo package versions, local path dependency versions, the Tauri GUI version, and the Windows sparse-package manifest version. The Windows sparse-package version is derived as `major.minor.patch.0`; SemVer pre-release and build metadata are intentionally not included in that four-part Windows version.
+
+Release and packaging work must follow the preparation-only policy in `docs/release/release-checklist.md` and `packaging/README.md`. Draft manifests and local validation commands are allowed; public package-manager submissions are blocked until explicit 1.0 release approval.
 
 ## Git Commit Message
 

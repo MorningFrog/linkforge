@@ -106,6 +106,14 @@ GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`,
 - Core link management and the CLI support Windows and Linux.
 - The GUI is designed for Windows desktop environments and the Linux GNOME desktop environment.
 
+## Distribution Preparation
+
+LinkForge's stable public release identity is `io.github.morningfrog.LinkForge`, with repository and support metadata rooted at `https://github.com/MorningFrog/linkforge`.
+
+Native packaged builds are planned to install the full LinkForge surface by default: CLI, Tauri GUI, desktop metadata, icons, shell completions, and the matching platform context-menu integration. Flatpak is the exception: it provides the GUI/CLI inside the sandbox but does not install host GNOME Files integration; use native packages for file-manager integration.
+
+Packaging drafts live under `packaging/` and are preparation-only until explicit 1.0 release approval. They must not be submitted to winget-pkgs, Flathub, Debian, Ubuntu PPA, Fedora, openSUSE, AUR, or another public repository before approval. The local release checklist and smoke-test templates live under `docs/release/`.
+
 ## Project Structure
 
 - `crates/linkforge-core`: Core link management logic.
@@ -115,3 +123,6 @@ GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`,
 - `crates/linkforge-context-menu-windows`: Windows Explorer command extension for the Windows 11 top-level context menu.
 - `crates/linkforge-context-menu-gnome`: GNOME Files/Nautilus `nautilus-python` context-menu extension installer.
 - `scripts/context-menu/windows/modern`: Windows sparse-package registration scripts.
+- `docs/release`: Release identity, install-surface decisions, checklist, and context-menu smoke-test records.
+- `packaging`: Draft winget, Debian/Ubuntu, and Flatpak packaging metadata.
+- `debian`: Draft Debian/Ubuntu package metadata used by standard Debian packaging tools.

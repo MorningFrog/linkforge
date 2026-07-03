@@ -1,0 +1,4 @@
+target/release/linkforge-gui usr/bin/
+packaging/flatpak/io.github.morningfrog.LinkForge.desktop usr/share/applications/
+packaging/flatpak/io.github.morningfrog.LinkForge.metainfo.xml usr/share/metainfo/
+packaging/flatpak/io.github.morningfrog.LinkForge.svg usr/share/icons/hicolor/scalable/apps/

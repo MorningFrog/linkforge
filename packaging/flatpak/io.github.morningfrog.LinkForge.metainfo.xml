@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.morningfrog.LinkForge</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>LinkForge</name>
+  <summary>Create and inspect symbolic links and hard links</summary>
+  <developer id="io.github.morningfrog">
+    <name>MorningFrog</name>
+  </developer>
+  <description>
+    <p>
+      LinkForge is a desktop and command-line tool for creating, inspecting,
+      and managing symbolic links and hard links.
+    </p>
+    <p>
+      It supports direct link creation, same-file checks, hard-link counts,
+      sibling discovery, hard-link group scanning, hard-link-preserving
+      directory clones, and batch link creation.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.morningfrog.LinkForge.desktop</launchable>
+  <categories>
+    <category>Utility</category>
+    <category>FileTools</category>
+  </categories>
+  <keywords>
+    <keyword>link</keyword>
+    <keyword>symlink</keyword>
+    <keyword>hardlink</keyword>
+    <keyword>filesystem</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/MorningFrog/linkforge</url>
+  <url type="bugtracker">https://github.com/MorningFrog/linkforge/issues</url>
+  <url type="vcs-browser">https://github.com/MorningFrog/linkforge</url>
+  <url type="help">https://github.com/MorningFrog/linkforge/issues</url>
+  <releases>
+    <release version="0.1.0" date="2026-07-02">
+      <description>
+        <p>Initial pre-release packaging metadata for LinkForge.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

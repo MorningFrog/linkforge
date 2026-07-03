@@ -1,0 +1,26 @@
+app-id: io.github.morningfrog.LinkForge
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: linkforge-gui
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+modules:
+  - name: linkforge
+    buildsystem: simple
+    build-commands:
+      - cargo build --release --locked --offline -p linkforge-cli -p linkforge-gui
+      - install -Dm755 target/release/linkforge /app/bin/linkforge
+      - install -Dm755 target/release/linkforge-gui /app/bin/linkforge-gui
+      - install -Dm644 packaging/flatpak/io.github.morningfrog.LinkForge.desktop /app/share/applications/io.github.morningfrog.LinkForge.desktop
+      - install -Dm644 packaging/flatpak/io.github.morningfrog.LinkForge.metainfo.xml /app/share/metainfo/io.github.morningfrog.LinkForge.metainfo.xml
+      - install -Dm644 packaging/flatpak/io.github.morningfrog.LinkForge.svg /app/share/icons/hicolor/scalable/apps/io.github.morningfrog.LinkForge.svg
+    sources:
+      - type: dir
+        path: ../..

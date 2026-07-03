@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+export CARGO_HOME ?= $(CURDIR)/.cargo-home
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked --offline
+	mkdir -p target/release/completions/bash target/release/completions/zsh target/release/completions/fish
+	target/release/linkforge completions bash > target/release/completions/bash/linkforge
+	target/release/linkforge completions zsh > target/release/completions/zsh/_linkforge
+	target/release/linkforge completions fish > target/release/completions/fish/linkforge.fish
+
+override_dh_auto_test:
+	cargo test --locked --offline

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    echo "Removing LinkForge GNOME Files integration."
+    echo "Restart GNOME Files with: nautilus -q"
+fi
+
+#DEBHELPER#

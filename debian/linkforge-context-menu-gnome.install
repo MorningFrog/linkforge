@@ -1,0 +1,2 @@
+target/release/linkforge-context-menu-gnome usr/bin/
+packaging/debian/share/nautilus-python/extensions/linkforge.py usr/share/nautilus-python/extensions/

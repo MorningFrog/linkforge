@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LinkForge
+Comment=Create and inspect symbolic links and hard links
+Exec=linkforge-gui
+Icon=io.github.morningfrog.LinkForge
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=link;symlink;hardlink;filesystem;

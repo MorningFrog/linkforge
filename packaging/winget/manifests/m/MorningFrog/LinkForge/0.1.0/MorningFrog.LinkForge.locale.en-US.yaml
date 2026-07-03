@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+PackageIdentifier: MorningFrog.LinkForge
+PackageVersion: "0.1.0"
+PackageLocale: en-US
+Publisher: MorningFrog
+PublisherUrl: "https://github.com/MorningFrog"
+PublisherSupportUrl: "https://github.com/MorningFrog/linkforge/issues"
+Author: MorningFrog
+PackageName: LinkForge
+PackageUrl: "https://github.com/MorningFrog/linkforge"
+License: Apache-2.0
+LicenseUrl: "https://github.com/MorningFrog/linkforge/blob/main/LICENSE"
+Copyright: Copyright MorningFrog
+ShortDescription: Create and inspect symbolic links and hard links.
+Description: LinkForge is a desktop and command-line tool for creating, inspecting, and managing symbolic links and hard links, with Windows Explorer and GNOME Files context-menu workflows.
+Moniker: linkforge
+Tags:
+  - hardlink
+  - link
+  - symlink
+  - tauri
+  - utility
+ReleaseNotesUrl: "https://github.com/MorningFrog/linkforge/releases/tag/v0.1.0"
+PrivacyUrl: "https://github.com/MorningFrog/linkforge/blob/main/PRIVACY.md"
+ManifestType: defaultLocale
+ManifestVersion: "1.9.0"

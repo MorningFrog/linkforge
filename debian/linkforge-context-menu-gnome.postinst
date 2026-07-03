@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    echo "LinkForge GNOME Files integration is installed."
+    echo "Restart GNOME Files with: nautilus -q"
+fi
+
+#DEBHELPER#

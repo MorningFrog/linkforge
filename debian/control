@@ -1,0 +1,62 @@
+Source: linkforge
+Section: utils
+Priority: optional
+Maintainer: MorningFrog <1098224028@qq.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cargo,
+ rustc,
+ pkg-config,
+ libssl-dev,
+ libgtk-3-dev,
+ libwebkit2gtk-4.1-dev | libwebkit2gtk-4.0-dev,
+ libayatana-appindicator3-dev,
+ librsvg2-dev,
+ patchelf
+Standards-Version: 4.7.0
+Homepage: https://github.com/MorningFrog/linkforge
+Rules-Requires-Root: no
+
+Package: linkforge
+Architecture: all
+Depends:
+ linkforge-cli (= ${binary:Version}),
+ linkforge-gui (= ${binary:Version}),
+ linkforge-context-menu-gnome (= ${binary:Version}),
+ ${misc:Depends}
+Description: create and inspect symbolic links and hard links
+ LinkForge is a desktop and command-line tool for creating, inspecting,
+ and managing symbolic links and hard links. This meta package installs
+ the CLI, GUI, and GNOME Files integration.
+
+Package: linkforge-cli
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: LinkForge command-line interface
+ Command-line interface for creating and inspecting symbolic links and hard
+ links, including batch operations and shell completion generation.
+
+Package: linkforge-gui
+Architecture: any
+Depends:
+ linkforge-cli (= ${binary:Version}),
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: LinkForge graphical interface
+ Tauri desktop GUI for LinkForge link creation, inspection, hard-link group
+ scanning, and hard-link-preserving directory tree cloning.
+
+Package: linkforge-context-menu-gnome
+Architecture: any
+Depends:
+ linkforge-gui (= ${binary:Version}),
+ python3,
+ python3-gi,
+ gir1.2-nautilus-4.0,
+ python3-nautilus,
+ ${shlibs:Depends},
+ ${misc:Depends}
+Description: GNOME Files integration for LinkForge
+ GNOME Files context-menu integration for LinkForge through nautilus-python.

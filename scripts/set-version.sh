@@ -6,7 +6,8 @@ usage() {
     cat <<'EOF'
 Usage: scripts/set-version.sh <version> [--dry-run] [--no-lock]
 
-Updates all workspace package versions and local path dependency versions.
+Updates workspace package versions, local path dependency versions, the
+Tauri app version, and the Windows sparse-package manifest version.
 
 Options:
   --dry-run   Show files that would be updated without changing them.
@@ -73,7 +74,7 @@ cd "$repo_root"
 tmp_dir=${TMPDIR:-/tmp}
 manifests_file=$(mktemp "$tmp_dir/linkforge-manifests.XXXXXX")
 names_file=$(mktemp "$tmp_dir/linkforge-package-names.XXXXXX")
-trap 'rm -f "$manifests_file" "$names_file" "$manifest_tmp"' EXIT HUP INT TERM
+trap 'rm -f "$manifests_file" "$names_file"; if [ -n "$manifest_tmp" ]; then rm -f "$manifest_tmp"; fi' EXIT HUP INT TERM
 manifest_tmp=
 
 find . \
@@ -102,6 +103,27 @@ if [ ! -s "$names_file" ]; then
 fi
 
 changed=0
+
+appx_version=$(printf '%s\n' "$version" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3.0/')
+
+update_if_changed() {
+    path=$1
+    updated=$2
+
+    if ! cmp -s "$path" "$updated"; then
+        changed=1
+        if [ "$dry_run" -eq 1 ]; then
+            echo "Would update $path"
+        else
+            mv "$updated" "$path"
+            echo "Updated $path"
+        fi
+    fi
+
+    if [ -e "$updated" ]; then
+        rm -f "$updated"
+    fi
+}
 
 while IFS= read -r manifest; do
     if ! awk '
@@ -153,22 +175,42 @@ while IFS= read -r manifest; do
     ' "$manifest" > "$manifest_tmp"
 
     if ! cmp -s "$manifest" "$manifest_tmp"; then
-        changed=1
-        if [ "$dry_run" -eq 1 ]; then
-            echo "Would update $manifest"
-        else
-            mv "$manifest_tmp" "$manifest"
-            manifest_tmp=
-            echo "Updated $manifest"
-        fi
+        update_if_changed "$manifest" "$manifest_tmp"
+        manifest_tmp=
     fi
 
-    rm -f "$manifest_tmp"
+    if [ -n "$manifest_tmp" ]; then
+        rm -f "$manifest_tmp"
+    fi
     manifest_tmp=
 done < "$manifests_file"
 
+tauri_config=./crates/linkforge-gui/tauri.conf.json
+manifest_tmp=$(mktemp "$tmp_dir/linkforge-tauri-conf.XXXXXX")
+awk -v new_version="$version" '
+    !done && /"version"[[:space:]]*:/ {
+        sub(/"version"[[:space:]]*:[[:space:]]*"[^"]+"/, "\"version\": \"" new_version "\"")
+        done = 1
+    }
+    { print }
+' "$tauri_config" > "$manifest_tmp"
+update_if_changed "$tauri_config" "$manifest_tmp"
+manifest_tmp=
+
+windows_register_script=./scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1
+manifest_tmp=$(mktemp "$tmp_dir/linkforge-windows-register.XXXXXX")
+awk -v appx_version="$appx_version" '
+    /^\$SparsePackageVersion[[:space:]]*=/ {
+        print "$SparsePackageVersion = \"" appx_version "\""
+        next
+    }
+    { print }
+' "$windows_register_script" > "$manifest_tmp"
+update_if_changed "$windows_register_script" "$manifest_tmp"
+manifest_tmp=
+
 if [ "$changed" -eq 0 ]; then
-    echo "All workspace manifests already use version $version."
+    echo "All release version files already use version $version."
 fi
 
 if [ "$dry_run" -eq 1 ]; then

@@ -1,0 +1,4 @@
+target/release/linkforge usr/bin/
+target/release/completions/bash/linkforge usr/share/bash-completion/completions/
+target/release/completions/zsh/_linkforge usr/share/zsh/vendor-completions/
+target/release/completions/fish/linkforge.fish usr/share/fish/vendor_completions.d/

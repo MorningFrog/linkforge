@@ -16,6 +16,8 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 - Command-line interface for link creation, inspection, batch operations, hard-link-preserving clones, help output, and shell completion generation.
 - Tauri desktop GUI for the main LinkForge workflows.
 - Native system dialogs for GUI path selection.
+- Cross-platform CI gate for formatting, tests, and clippy on Windows and Linux.
+- Release version sync now covers workspace manifests, Tauri GUI version metadata, and the Windows sparse-package manifest version.
 
 ### File Manager Integration
 
@@ -23,6 +25,13 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 - GNOME Files advanced context-menu integration through `nautilus-python`.
 - File-manager quick actions for inspecting links, comparing two files, picking link sources, and creating links in a target folder.
 - Lightweight GUI dialogs for file-manager results, conflicts, warnings, and errors.
+
+### Release Preparation
+
+- Added stable release identity metadata for `io.github.morningfrog.LinkForge`.
+- Added preparation-only release checklist and Windows/GNOME context-menu smoke-test templates.
+- Added draft winget, Debian/Ubuntu, and Flatpak packaging metadata without enabling public submissions.
+- Added explicit Tauri content security policy for the local frontend and required Tauri IPC.
 
 ### Cleanup
 
