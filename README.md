@@ -33,8 +33,7 @@ linkforge batch-hardlink --target-dir <dir> [--dry-run] [--on-conflict fail|over
 linkforge completions <shell>
 ```
 
-Commands that create links or clone directory trees fail when the destination already exists. Pass `--force` to replace an existing file or symbolic link; existing real directories are never replaced.
-Batch commands create one link per source in the target directory. They run a preflight before creating links, support `--dry-run`, and default to `--on-conflict fail`; use `rename`, `overwrite`, or `skip` to choose a different conflict policy. `batch-hardlink` creates a hard-link directory tree when a source is a directory.
+Commands that create links or clone directory trees fail when the destination already exists. Pass `--force` to replace an existing file or symbolic link; existing real directories are never replaced. Batch commands create one link per source in the target directory. They run a preflight before creating links, support `--dry-run`, and default to `--on-conflict fail`; use `rename`, `overwrite`, or `skip` to choose a different conflict policy. `batch-hardlink` creates a hard-link directory tree when a source is a directory.
 
 Run `linkforge help` to list commands, or `linkforge help <command>` to show help for a specific command.
 
@@ -73,15 +72,13 @@ GUI browse buttons use native system file, directory, and save dialogs for sourc
 
 The GUI can also be launched by file-manager context menu entries. Windows 11 uses a modern Explorer command extension for the top-level context menu, and GNOME Files uses a `nautilus-python` extension.
 
-The file-manager menus also support a two-step link workflow: right-click one or more files or folders and choose `LinkForge > Pick Link Source`, then right-click a single target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. Drop actions start LinkForge hidden, preflight sources and the target directory before creating links, perform clean batches silently, and only show a lightweight Tauri-rendered dialog when a conflict, warning, error, skip, rename, cancellation, or failure needs attention. For picked directories, hard-link creation builds a directory tree whose regular files are hard links to the source files and whose symbolic links are copied as links. If preflight finds target-name conflicts or hard-link warnings, LinkForge shows a review dialog before creating any links; remaining conflicts can still be resolved by renaming, overwriting, skipping, or cancelling in the lightweight dialog, with an option to apply the choice to remaining conflicts and a button to expand the current window into the full LinkForge interface.
-This two-step workflow uses the same core batch-link preflight and conflict handling as the CLI batch commands.
+The file-manager menus also support a two-step link workflow: right-click one or more files or folders and choose `LinkForge > Pick Link Source`, then right-click a single target folder or folder background and choose `Create Symlink from ...` or `Create Hard Link from ...`. Drop actions start LinkForge hidden, preflight sources and the target directory before creating links, perform clean batches silently, and only show a lightweight Tauri-rendered dialog when a conflict, warning, error, skip, rename, cancellation, or failure needs attention. For picked directories, hard-link creation builds a directory tree whose regular files are hard links to the source files and whose symbolic links are copied as links. If preflight finds target-name conflicts or hard-link warnings, LinkForge shows a review dialog before creating any links; remaining conflicts can still be resolved by renaming, overwriting, skipping, or cancelling in the lightweight dialog, with an option to apply the choice to remaining conflicts and a button to expand the current window into the full LinkForge interface. This two-step workflow uses the same core batch-link preflight and conflict handling as the CLI batch commands.
 
 For local development, context-menu registration, and manual testing commands, see `CONTRIBUTING.md`.
 
 ### Context Menu Behavior
 
-LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu. GUI-opening actions launch `linkforge-gui --context-action <action> --paths <path>...`; GNOME Files writes picked-source state directly for `Pick Link Source` so follow-up menu labels update without waiting on a hidden GUI launch.
-Both integrations show `Compare Same File` when exactly two files are selected; this opens the Inspect view and runs the same-file comparison automatically.
+LinkForge maintains two context-menu integrations: Windows 11 modern and GNOME Files advanced. Both use a `LinkForge` menu. GUI-opening actions launch `linkforge-gui --context-action <action> --paths <path>...`; GNOME Files writes picked-source state directly for `Pick Link Source` so follow-up menu labels update without waiting on a hidden GUI launch. Both integrations show `Compare Same File` when exactly two files are selected; this opens the Inspect view and runs the same-file comparison automatically.
 
 | Target | Windows 11 modern | GNOME Files advanced |
 | --- | --- | --- |

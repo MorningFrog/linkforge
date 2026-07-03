@@ -1,8 +1,6 @@
 # Debian And Ubuntu PPA Draft
 
-This directory documents the Debian/Ubuntu packaging draft. The actual Debian
-metadata lives in the repository-root `debian/` directory so standard Debian
-tools can discover it when run from the source root.
+This directory documents the Debian/Ubuntu packaging draft. The actual Debian metadata lives in the repository-root `debian/` directory so standard Debian tools can discover it when run from the source root.
 
 ## Channel Decision
 
@@ -29,9 +27,7 @@ Before building a source package, prepare a vendored tree:
 cargo vendor vendor
 ```
 
-Then add the generated Cargo source replacement config to the source tarball.
-The source package build is expected to run from the repository root, where
-`debian/rules` can see `Cargo.toml`, workspace crates, and `target/`.
+Then add the generated Cargo source replacement config to the source tarball. The source package build is expected to run from the repository root, where `debian/rules` can see `Cargo.toml`, workspace crates, and `target/`.
 
 ## Dependencies
 

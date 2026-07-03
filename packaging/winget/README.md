@@ -37,10 +37,7 @@ winget upgrade --manifest packaging/winget/manifests/m/MorningFrog/LinkForge/0.1
 winget uninstall MorningFrog.LinkForge --silent
 ```
 
-The draft manifest currently keeps an all-zero `InstallerSha256` and future
-GitHub release URL as placeholders. `winget validate` may pass, but
-`winget install --manifest` must not be used until those fields are replaced
-with a real release artifact URL and SHA256.
+The draft manifest currently keeps an all-zero `InstallerSha256` and future GitHub release URL as placeholders. `winget validate` may pass, but `winget install --manifest` must not be used until those fields are replaced with a real release artifact URL and SHA256.
 
 Also validate in Windows Sandbox:
 

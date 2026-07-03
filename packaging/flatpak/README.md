@@ -12,25 +12,16 @@ Flatpak does not install the host GNOME Files `nautilus-python` extension. Users
 
 ## Preparing Offline Cargo Sources
 
-The draft manifest builds from the local source tree and requires a vendored
-Cargo source directory plus Cargo source replacement config before
-`flatpak-builder` validation:
+The draft manifest builds from the local source tree and requires a vendored Cargo source directory plus Cargo source replacement config before `flatpak-builder` validation:
 
 ```text
 mkdir -p .cargo
 cargo vendor vendor > .cargo/config.toml
 ```
 
-Do not commit the generated `vendor/` directory or local `.cargo/` config;
-both are ignored for release-preparation work. For public Flatpak or Flathub
-submission, replace the local `type: dir` source in
-`io.github.morningfrog.LinkForge.yml` with a release archive source and real
-SHA256, or adopt generated Flatpak Cargo sources as part of the release
-artifact workflow.
+Do not commit the generated `vendor/` directory or local `.cargo/` config; both are ignored for release-preparation work. For public Flatpak or Flathub submission, replace the local `type: dir` source in `io.github.morningfrog.LinkForge.yml` with a release archive source and real SHA256, or adopt generated Flatpak Cargo sources as part of the release artifact workflow.
 
-Real application screenshots are still required before public Flathub
-submission. The draft MetaInfo intentionally does not reference a missing
-screenshot file.
+Real application screenshots are still required before public Flathub submission. The draft MetaInfo intentionally does not reference a missing screenshot file.
 
 ## Local Validation
 

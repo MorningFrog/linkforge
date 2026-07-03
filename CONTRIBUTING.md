@@ -50,8 +50,7 @@ The shared context-menu launch protocol for GUI-opening actions is:
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
-Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. GNOME Files writes picked-source state directly from the `nautilus-python` extension so follow-up menus can update without waiting on a hidden GUI launch. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations.
-Apart from GNOME's direct `pick-source` state write, context-menu entries only launch the GUI and pass context; picked-source state, action names, and menu labels are shared through `linkforge-shared`, while actual batch link preflight and creation are handled by `linkforge-core`.
+Supported GUI-opening actions are `symlink`, `hardlink`, `same-file`, `link-count`, `siblings`, `scan-groups`, `clone-tree`, `drop-symlink`, and `drop-hardlink`. Context-menu entries also use `pick-source`; it succeeds silently after writing the picked-source state. GNOME Files writes picked-source state directly from the `nautilus-python` extension so follow-up menus can update without waiting on a hidden GUI launch. Drop actions start the Tauri WebView hidden, exit silently on clean success, and only show a lightweight Tauri-rendered dialog for conflicts, errors, renames, skips, failures, or cancellations. Apart from GNOME's direct `pick-source` state write, context-menu entries only launch the GUI and pass context; picked-source state, action names, and menu labels are shared through `linkforge-shared`, while actual batch link preflight and creation are handled by `linkforge-core`.
 
 ### Context Menu Integration
 
@@ -121,10 +120,7 @@ When GUI checking is enabled, the installer writes the resolved absolute GUI exe
 
 ##### Test
 
-After restarting GNOME Files, select one file, exactly two files, one directory,
-and a directory background to confirm the `LinkForge` menu appears and launches
-the GUI. Also test picking one or more sources and dropping them into a target
-folder.
+After restarting GNOME Files, select one file, exactly two files, one directory, and a directory background to confirm the `LinkForge` menu appears and launches the GUI. Also test picking one or more sources and dropping them into a target folder.
 
 ##### Uninstall
 
