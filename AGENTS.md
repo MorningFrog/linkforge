@@ -58,15 +58,15 @@ Get-ChildItem src
 
 Use an existing repository script, or create a temporary `.ps1` script, whenever a command involves any of the following:
 
-* Nested or escaped quotes
-* Multiline strings
-* Embedded JSON, TOML, YAML, XML, source code, or regular expressions
-* Multiple pipelines or redirections
-* Complex environment-variable expansion
-* Dynamic construction of native-process arguments
-* Paths or arguments that require nontrivial escaping
-* PowerShell invoking another shell such as `cmd.exe`, Bash, or WSL
-* A command that has already failed because of quoting or parsing
+- Nested or escaped quotes
+- Multiline strings
+- Embedded JSON, TOML, YAML, XML, source code, or regular expressions
+- Multiple pipelines or redirections
+- Complex environment-variable expansion
+- Dynamic construction of native-process arguments
+- Paths or arguments that require nontrivial escaping
+- PowerShell invoking another shell such as `cmd.exe`, Bash, or WSL
+- A command that has already failed because of quoting or parsing
 
 Run PowerShell scripts with a simple invocation:
 
@@ -82,13 +82,13 @@ powershell.exe -NoLogo -NoProfile -NonInteractive -File path\to\script.ps1
 
 Inside PowerShell scripts:
 
-* Pass native-process arguments as arrays rather than constructing a command string.
-* Invoke native programs with the call operator `&`.
-* Check `$LASTEXITCODE` after native-process execution.
-* Use `try`/`finally` when temporary files or directories require cleanup.
-* Prefer files or standard input for transferring complex structured data.
-* Prefer repository-provided task scripts over newly generated scripts.
-* Keep temporary agent scripts under `.agent-tmp/` and remove them after successful or failed execution unless they are useful as permanent project tooling.
+- Pass native-process arguments as arrays rather than constructing a command string.
+- Invoke native programs with the call operator `&`.
+- Check `$LASTEXITCODE` after native-process execution.
+- Use `try`/`finally` when temporary files or directories require cleanup.
+- Prefer files or standard input for transferring complex structured data.
+- Prefer repository-provided task scripts over newly generated scripts.
+- Keep temporary agent scripts under `.agent-tmp/` and remove them after successful or failed execution unless they are useful as permanent project tooling.
 
 Example:
 
@@ -111,4 +111,3 @@ Do not use `Invoke-Expression` to execute generated command strings.
 Do not wrap a complex command in `cmd.exe /c`, `bash -lc`, `wsl.exe ...`, or another nested shell merely to avoid PowerShell syntax. This adds another parsing layer and usually makes quoting less reliable. Calling an existing `.cmd`, `.sh`, or WSL-side script is acceptable when the invocation itself remains simple.
 
 When a complex inline command fails because of parsing or quoting, do not repeatedly attempt alternate escaping forms. Move the operation into a script immediately and continue working on the actual task.
-
