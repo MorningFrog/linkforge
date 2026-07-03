@@ -1,0 +1,162 @@
+name: Release Draft Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/release-drafts.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "debian/**"
+      - "docs/release/**"
+      - "packaging/**"
+      - "scripts/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/release-drafts.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "debian/**"
+      - "docs/release/**"
+      - "packaging/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-draft-artifacts:
+    name: Windows draft artifacts
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build GUI artifact
+        run: cargo build -p linkforge-gui --release
+
+      - name: Build Windows shell extension
+        run: cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release
+
+      - name: Prepare Windows context-menu sparse package
+        shell: pwsh
+        run: >
+          powershell -ExecutionPolicy Bypass -File
+          scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1
+          -Configuration Release
+          -PrepareOnly
+          -StagingDir target/linkforge-modern-context-menu-ci
+
+      - name: Validate release drafts
+        shell: pwsh
+        run: >
+          powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1
+          -RequireWindowsAppxManifest
+          -WindowsAppxManifest target/linkforge-modern-context-menu-ci/AppxManifest.xml
+
+      - name: Generate Windows draft checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/release-validation -Force | Out-Null
+          $paths = @(
+            "target/release/linkforge-gui.exe",
+            "target/x86_64-pc-windows-msvc/release/linkforge_context_menu_windows.dll",
+            "target/linkforge-modern-context-menu-ci/AppxManifest.xml"
+          )
+          Get-FileHash -Algorithm SHA256 -LiteralPath $paths |
+            Format-Table -AutoSize |
+            Out-String |
+            Set-Content -LiteralPath target/release-validation/windows-checksums.txt -Encoding UTF8
+
+      - name: Upload Windows validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-draft-validation
+          path: |
+            target/release-validation/
+            target/linkforge-modern-context-menu-ci/
+
+  linux-packaging-drafts:
+    name: Linux packaging drafts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Ubuntu packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            appstream \
+            build-essential \
+            cargo \
+            debhelper \
+            desktop-file-utils \
+            devscripts \
+            dpkg-dev \
+            fakeroot \
+            file \
+            flatpak \
+            flatpak-builder \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            lintian \
+            patchelf \
+            pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare offline Cargo sources
+        run: |
+          mkdir -p .cargo
+          cargo vendor vendor > .cargo/config.toml
+
+      - name: Validate release drafts
+        run: bash scripts/validate-release-drafts.sh
+
+      - name: Build Debian binary packages
+        run: |
+          chmod +x debian/rules
+          dpkg-buildpackage -us -uc -b
+          lintian --fail-on error ../linkforge_*.changes
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo build-dir packaging/flatpak/io.github.morningfrog.LinkForge.yml
+          flatpak-builder-lint manifest packaging/flatpak/io.github.morningfrog.LinkForge.yml
+          flatpak-builder-lint repo repo
+          flatpak build-bundle repo LinkForge.flatpak io.github.morningfrog.LinkForge
+
+      - name: Generate Linux draft checksums
+        run: |
+          mkdir -p target/release-validation
+          sha256sum ../linkforge_*.deb ../linkforge_*.buildinfo ../linkforge_*.changes LinkForge.flatpak > target/release-validation/linux-checksums.txt
+
+      - name: Upload Linux validation report and draft artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-draft-validation
+          path: |
+            target/release-validation/
+            ../linkforge_*.deb
+            ../linkforge_*.buildinfo
+            ../linkforge_*.changes
+            LinkForge.flatpak

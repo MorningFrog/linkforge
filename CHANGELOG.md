@@ -35,6 +35,10 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 - Added the Tauri GUI PNG icon asset required by local builds while retaining the Windows icon for bundling.
 - Added preparation-only release checklist and Windows/GNOME context-menu smoke-test templates.
 - Added draft winget, Debian/Ubuntu, and Flatpak packaging metadata without enabling public submissions.
+- Added non-publishing release-draft validation scripts and a CI workflow for draft Windows context-menu staging, Debian packages, Flatpak bundles, checksums, and validation reports.
+- Updated the Flatpak draft to use the current GNOME runtime branch and the Rust SDK extension during sandboxed builds.
+- Hardened the Debian packaging draft for vendored Cargo sources and WSL validation by preserving `vendor/` during clean and normalizing installed data-file permissions.
+- Recorded WSLg GNOME Files precheck results, Debian binary/source package validation status, and Flatpak local validation blockers for the release gate.
 - Added explicit Tauri content security policy for the local frontend and required Tauri IPC.
 
 ### Cleanup

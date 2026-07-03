@@ -5,6 +5,9 @@ export CARGO_HOME ?= $(CURDIR)/.cargo-home
 %:
 	dh $@
 
+override_dh_clean:
+	dh_clean -Xvendor
+
 override_dh_auto_build:
 	cargo build --release --locked --offline
 	mkdir -p target/release/completions/bash target/release/completions/zsh target/release/completions/fish
@@ -14,3 +17,10 @@ override_dh_auto_build:
 
 override_dh_auto_test:
 	cargo test --locked --offline
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0644 debian/linkforge-gui/usr/share/applications/io.github.morningfrog.LinkForge.desktop
+	chmod 0644 debian/linkforge-gui/usr/share/icons/hicolor/scalable/apps/io.github.morningfrog.LinkForge.svg
+	chmod 0644 debian/linkforge-gui/usr/share/metainfo/io.github.morningfrog.LinkForge.metainfo.xml
+	chmod 0644 debian/linkforge-context-menu-gnome/usr/share/nautilus-python/extensions/linkforge.py

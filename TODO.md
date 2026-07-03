@@ -27,27 +27,30 @@
 - [x] Make Linux builds network-independent for package builders. Decide whether to vendor Cargo dependencies, rely on distro-packaged Rust crates, or maintain a source tarball workflow that satisfies Debian/Ubuntu build rules.
 - [x] Identify and declare build/runtime dependencies for Tauri GUI packages, CLI packages, and GNOME integration packages, including WebKitGTK, GTK, `nautilus-python`, Python GI bindings, filesystem/link support expectations, and any distro-specific dependency names.
 - [ ] Build and lint source and binary packages locally with Debian/Ubuntu tooling before any upload: source package build, clean chroot build with `sbuild` or equivalent, `lintian`, install/upgrade/remove tests, shell completion tests, desktop file validation, AppStream validation, and context-menu smoke tests on GNOME.
+- [ ] Resolve Debian source-package lintian blockers from vendored Cargo content before treating `sbuild`, PPA, or Debian upload validation as release-ready.
 - [x] Document the Ubuntu PPA dry-run path: create a Launchpad account and GPG key, build a signed source package, upload with `dput` only to a private/test PPA when approved, and remember that PPA builds binary packages from uploaded source packages rather than accepting local binaries. Reference: https://help.launchpad.net/Packaging/PPA
 - [x] Document the Debian official-package path for later: prepare an ITP/RFP decision, maintain packaging in a public VCS, seek review through Debian mentors or an existing Debian Developer sponsor, and avoid assuming direct archive upload rights. Reference: https://www.debian.org/doc/manuals/maint-guide/
 
 ## P0: Linux Flatpak/Flathub Preparation
 
 - [x] Decide the Flatpak application ID before producing public metadata. Use a stable reverse-DNS ID tied to a real domain or code-hosting namespace, then align the Tauri identifier, desktop file ID, AppStream ID, and Flatpak manifest ID.
-- [ ] Create a draft top-level Flatpak manifest under `packaging/flatpak/` with current Flathub runtime/sdk, Rust/Tauri build steps, pinned sources, offline Cargo dependency handling, install commands, exported binary, desktop file, icons, and AppStream metadata. Reference: https://docs.flathub.org/docs/for-app-authors/requirements
+- [x] Create a draft top-level Flatpak manifest under `packaging/flatpak/` with current Flathub runtime/sdk, Rust/Tauri build steps, offline Cargo dependency handling, install commands, exported binary, desktop file, icons, and AppStream metadata. Keep replacing the local draft source with a release archive and real SHA256 as a release-checklist validation step. Reference: https://docs.flathub.org/docs/for-app-authors/requirements
 - [x] Decide Flatpak sandbox permissions carefully. LinkForge needs broad filesystem operations to create links, so document whether the Flatpak build will use portals, static filesystem permissions, or a reduced feature set compared with native packages.
 - [x] Decide how GNOME Files integration works for Flatpak. If a sandboxed Flatpak cannot install or run the host `nautilus-python` extension safely, document that the Flatpak package does not provide file-manager integration and point users to native deb/rpm packages for that feature.
 - [ ] Add AppStream MetaInfo and desktop metadata that pass Flathub checks: `%{id}.metainfo.xml`, launchable desktop ID, metadata license, project license, screenshots, developer/name summary, categories, keywords, release entries, and exportable icon assets. Reference: https://docs.flathub.org/docs/for-app-authors/metainfo-guidelines
 - [ ] Validate the Flatpak locally before submission: `flatpak-builder` build/install/run, `flatpak-builder-lint manifest`, `flatpak-builder-lint repo`, `appstreamcli validate`, GUI smoke tests, file-link operation tests under sandbox permissions, and uninstall cleanup. Reference: https://docs.flathub.org/docs/for-app-authors/linter
+- [ ] Resolve Flathub linter blockers found in WSLg precheck: `finish-args-home-filesystem-access`, `metainfo-missing-screenshots`, and `appstream-screenshots-not-mirrored-in-ostree`.
 - [x] Document the future Flathub submission flow without opening it before 1.0: build locally, run the linter, open the new-app submission pull request, respond to review, then maintain updates through pull requests after acceptance. Reference: https://docs.flathub.org/docs/for-app-authors/submission
 
 ## P1: Reliability And Coverage
 
 - [ ] Add automated frontend or Tauri end-to-end coverage for initial context routing, lightweight modal flows, preflight choices, per-conflict resolution, `Open LinkForge` expansion, and non-clean result summaries.
-- [ ] Add automated checks for installer and registration artifacts, especially the generated Windows Appx manifest and PowerShell registration/unregistration scripts.
+- [x] Add automated checks for installer and registration artifacts, especially the generated Windows Appx manifest and PowerShell registration/unregistration scripts.
 - [ ] Define and test partial-failure handling for `clone-tree`, hard-link tree creation, and batch directory operations so interrupted or nested failures do not leave unclear results.
 - [ ] Make hard-link sibling UX platform-aware by using `siblingsRequiresRoot` in the frontend to require or prefill scan roots where needed and keep the Windows path simple.
 - [x] Reconcile documentation drift around GNOME context-menu installation, especially the stale `scripts/context-menu/gnome` reference in `AGENTS.md`.
-- [ ] Add packaging CI jobs that build draft artifacts without publishing: Windows installer, Linux deb package, Flatpak bundle, checksums, signatures when configured, and validation reports uploaded as CI artifacts.
+- [x] Add packaging CI jobs that build draft artifacts without publishing: Windows context-menu sparse-package staging, Linux deb package, Flatpak bundle, checksums, and validation reports uploaded as CI artifacts.
+- [ ] Extend packaging CI to build the final Tauri NSIS installer and verify signatures once signing inputs and installer bundling are available.
 - [ ] Add package install/upgrade/remove integration tests for each prepared channel so installer regressions are caught before public release.
 
 ## P2: Usability Improvements

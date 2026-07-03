@@ -109,7 +109,7 @@ LinkForge's stable public release identity is `io.github.morningfrog.LinkForge`,
 
 Native packaged builds are planned to install the full LinkForge surface by default: CLI, Tauri GUI, desktop metadata, icons, shell completions, and the matching platform context-menu integration. Flatpak is the exception: it provides the GUI/CLI inside the sandbox but does not install host GNOME Files integration; use native packages for file-manager integration.
 
-Packaging drafts live under `packaging/` and are preparation-only until explicit 1.0 release approval. They must not be submitted to winget-pkgs, Flathub, Debian, Ubuntu PPA, Fedora, openSUSE, AUR, or another public repository before approval. The local release checklist and smoke-test templates live under `docs/release/`.
+Packaging drafts live under `packaging/` and are preparation-only until explicit 1.0 release approval. They must not be submitted to winget-pkgs, Flathub, Debian, Ubuntu PPA, Fedora, openSUSE, AUR, or another public repository before approval. The local release checklist and smoke-test templates live under `docs/release/`, and draft packaging validation is automated by `.github/workflows/release-drafts.yml` plus the `scripts/validate-release-drafts.*` helpers.
 
 ## Project Structure
 

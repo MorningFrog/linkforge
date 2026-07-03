@@ -4,6 +4,7 @@ param(
     [string] $GuiExePath,
     [string] $ShellExtDllPath,
     [string] $StagingDir = "target/linkforge-modern-context-menu",
+    [switch] $PrepareOnly,
     [switch] $VerifyOnly,
     [switch] $SkipGuiCheck
 )
@@ -203,17 +204,6 @@ if ($SkipGuiCheck) {
 $shellExtDll = Resolve-Artifact -Path $ShellExtDllPath -Kind "shell extension" -ExpectedExtension ".dll"
 $assets = Join-Path $stage "Assets"
 
-if (-not (Test-AppxSideLoadingEnabled)) {
-    throw @"
-Windows rejected sparse package registration because Developer Mode or app sideloading is not enabled.
-
-Enable Developer Mode in Windows Settings:
-  Settings > System > For developers > Developer Mode
-
-Then rerun this script.
-"@
-}
-
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 New-Item -ItemType Directory -Path $assets -Force | Out-Null
 
@@ -291,12 +281,33 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "Failed to write Appx manifest: $manifestPath"
 }
 
+[xml] $parsedManifest = Get-Content -LiteralPath $manifestPath
+if ($parsedManifest.Package.Identity.Name -ne $PackageName) {
+    throw "Generated Appx manifest identity is not $PackageName."
+}
+
 Write-Host "Prepared LinkForge Windows 11 context menu staging:"
 Write-Host "  Configuration: $Configuration"
 Write-Host "  Staging dir: $stage"
 Write-Host "  GUI: $(Join-Path $stage $StagedGuiExeName)"
 Write-Host "  Shell extension: $(Join-Path $stage $StagedShellExtDllName)"
 Write-Host "  Manifest: $manifestPath"
+
+if ($PrepareOnly) {
+    Write-Host "Prepared only; skipped sparse package registration because -PrepareOnly was provided."
+    exit 0
+}
+
+if (-not (Test-AppxSideLoadingEnabled)) {
+    throw @"
+Windows rejected sparse package registration because Developer Mode or app sideloading is not enabled.
+
+Enable Developer Mode in Windows Settings:
+  Settings > System > For developers > Developer Mode
+
+Then rerun this script.
+"@
+}
 
 try {
     Add-AppxPackage -Register $manifestPath -ExternalLocation $stage

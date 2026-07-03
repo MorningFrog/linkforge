@@ -173,6 +173,8 @@ Use `scripts/set-version.ps1 <version>` or `scripts/set-version.sh <version>` to
 
 Release and packaging work must follow the preparation-only policy in `docs/release/release-checklist.md` and `packaging/README.md`. Draft manifests and local validation commands are allowed; public package-manager submissions are blocked until explicit 1.0 release approval.
 
+Before release packaging work is considered ready for manual smoke testing, run `powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1` on Windows or `bash scripts/validate-release-drafts.sh` on Linux. The non-publishing `.github/workflows/release-drafts.yml` workflow builds draft Windows context-menu staging artifacts, Debian packages, a Flatpak bundle, checksums, and validation reports for review.
+
 ## Git Commit Message
 
 Git commit messages in this project must follow the Conventional Commits specification.

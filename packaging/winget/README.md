@@ -31,6 +31,7 @@ These switches must be validated against the final Tauri NSIS artifact before wi
 After producing a release artifact:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1
 winget validate packaging/winget/manifests/m/MorningFrog/LinkForge/0.1.0
 winget install --manifest packaging/winget/manifests/m/MorningFrog/LinkForge/0.1.0 --silent
 winget upgrade --manifest packaging/winget/manifests/m/MorningFrog/LinkForge/0.1.0 --silent

@@ -9,3 +9,5 @@ Current decisions:
 - Flatpak uses `io.github.morningfrog.LinkForge` and does not provide host GNOME Files integration.
 
 Before any public release, follow `docs/release/release-checklist.md`.
+
+Draft packaging checks are automated by `.github/workflows/release-drafts.yml` and can also be run locally with `scripts/validate-release-drafts.ps1` on Windows or `scripts/validate-release-drafts.sh` on Linux. These checks build or inspect draft artifacts only; they do not publish to any package manager.

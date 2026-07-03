@@ -14,6 +14,8 @@ This checklist intentionally stops before public package-manager submission. Do 
 - [ ] `cargo fmt -- --check`
 - [ ] `cargo test`
 - [ ] `cargo clippy --all-targets -- -D warnings`
+- [ ] Run the release draft validation script for the current platform: `powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1` on Windows or `bash scripts/validate-release-drafts.sh` on Linux.
+- [ ] Run `.github/workflows/release-drafts.yml` or reproduce its Windows and Linux draft artifact steps locally without publishing.
 - [ ] Windows Explorer smoke test recorded in `docs/release/context-menu-smoke-tests.md`.
 - [ ] GNOME Files smoke test recorded in `docs/release/context-menu-smoke-tests.md`.
 
@@ -22,6 +24,7 @@ This checklist intentionally stops before public package-manager submission. Do 
 - [ ] Build release CLI: `cargo build -p linkforge-cli --release`.
 - [ ] Build release GUI / Tauri bundle.
 - [ ] Build release shell extension: `cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release`.
+- [ ] Prepare and validate the Windows context-menu sparse-package staging without registration: `powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -Configuration Release -PrepareOnly -StagingDir target/linkforge-modern-context-menu-release`, then run `scripts/validate-release-drafts.ps1 -RequireWindowsAppxManifest -WindowsAppxManifest target/linkforge-modern-context-menu-release/AppxManifest.xml`.
 - [ ] Produce a Tauri NSIS x64 installer that installs CLI, GUI, shell-extension DLL, icons/resources, and registers the Windows 11 context menu.
 - [ ] Sign `linkforge.exe`, `linkforge-gui.exe`, `linkforge_context_menu_windows.dll`, and the installer with Authenticode and timestamping.
 - [ ] Verify signatures in CI or a clean Windows validation machine.

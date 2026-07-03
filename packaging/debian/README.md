@@ -24,10 +24,14 @@ Release source packages must be built from a source tarball that includes vendor
 Before building a source package, prepare a vendored tree:
 
 ```text
-cargo vendor vendor
+cargo vendor --versioned-dirs vendor > .cargo/config.toml
 ```
 
-Then add the generated Cargo source replacement config to the source tarball. The source package build is expected to run from the repository root, where `debian/rules` can see `Cargo.toml`, workspace crates, and `target/`.
+Then add the generated Cargo source replacement config to the source tarball. The source package build is expected to run from the repository root, where `debian/rules` can see `Cargo.toml`, workspace crates, and `target/`. The `debian/rules` clean step preserves `vendor/` because vendored crates can contain source files that match debhelper cleanup patterns.
+
+When validating from WSL against a worktree stored under `/mnt/c`, copy the prepared source tree to WSL ext4 before running debhelper commands. DrvFS can expose normal `debian/*.install` files as executable, which makes debhelper treat install manifests as executable config files; use anchored excludes such as `/target/` when copying so vendored crate paths like `vendor/cc-*/src/target/` are preserved.
+
+The current vendored source package can be generated locally, but source lintian still reports E-level blockers from vendored Cargo content, including `source-is-missing` for bundled JavaScript/HTML benchmark files and `unpack-message-for-orig` for vendored Windows static libraries. Resolve this before treating `sbuild`, PPA, or Debian upload validation as release-ready; likely options are a cleaner repack strategy, a distro-crate strategy, or narrowly justified lintian overrides after review.
 
 ## Dependencies
 
@@ -38,8 +42,10 @@ Expected GNOME integration runtime dependencies include `python3`, `python3-gi`,
 ## Local Validation
 
 ```text
+bash scripts/validate-release-drafts.sh
 chmod +x debian/rules
 debuild -S -us -uc
+lintian --fail-on error ../linkforge_0.1.0-0ubuntu1_source.changes
 sbuild ../linkforge_0.1.0-0ubuntu1.dsc
 lintian
 desktop-file-validate packaging/flatpak/io.github.morningfrog.LinkForge.desktop

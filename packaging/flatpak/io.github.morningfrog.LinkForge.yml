@@ -1,8 +1,12 @@
 app-id: io.github.morningfrog.LinkForge
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "50"
 sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: linkforge-gui
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
 finish-args:
   - --share=ipc
   - --socket=wayland
