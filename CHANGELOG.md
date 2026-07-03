@@ -23,12 +23,14 @@ Initial pre-release for LinkForge, focused on creating, inspecting, and managing
 
 - Windows 11 Explorer top-level context-menu integration.
 - GNOME Files advanced context-menu integration through `nautilus-python`.
+- GNOME Files integration supports Nautilus GI 4.0 and 3.0, including Ubuntu 22.04 / Nautilus 42.
 - File-manager quick actions for inspecting links, comparing two files, picking link sources, and creating links in a target folder.
 - Lightweight GUI dialogs for file-manager results, conflicts, warnings, and errors.
 
 ### Release Preparation
 
 - Added stable release identity metadata for `io.github.morningfrog.LinkForge`.
+- Added the Tauri GUI PNG icon asset required by local builds while retaining the Windows icon for bundling.
 - Added preparation-only release checklist and Windows/GNOME context-menu smoke-test templates.
 - Added draft winget, Debian/Ubuntu, and Flatpak packaging metadata without enabling public submissions.
 - Added explicit Tauri content security policy for the local frontend and required Tauri IPC.

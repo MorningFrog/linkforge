@@ -5,7 +5,19 @@ import subprocess
 
 import gi
 
-gi.require_version("Nautilus", "4.0")
+
+def _require_nautilus():
+    last_error = None
+    for version in ("4.0", "3.0"):
+        try:
+            gi.require_version("Nautilus", version)
+            return
+        except ValueError as error:
+            last_error = error
+    raise last_error
+
+
+_require_nautilus()
 from gi.repository import GObject, Nautilus
 
 

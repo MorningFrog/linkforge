@@ -91,7 +91,7 @@ Both integrations show `Compare Same File` when exactly two files are selected; 
 | Directory | `Pick Link Source`, `Create Symlink(s) from ...`, `Create Hard Link(s) from ...`, `Open Symlink in LinkForge...`, `Find Hard Link Siblings...`, `Scan Hard Link Groups`, `Clone Tree Preserving Hard Links...` | Same dynamic items under `LinkForge` |
 | Directory background | `Create Symlink from ...`, `Create Hard Link from ...` | Same dynamic items under `LinkForge` |
 
-Windows 11 modern can dynamically hide unsupported items and include the picked source name or source count in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python` and may need `nautilus -q` after installation. Both integrations preflight drop batches and route conflicts, warnings, errors, and non-clean completion summaries through LinkForge's lightweight Tauri-rendered dialogs instead of platform-native message boxes; clean drop batches exit silently.
+Windows 11 modern can dynamically hide unsupported items and include the picked source name or source count in menu labels. GNOME Files advanced dynamically builds its menu through `nautilus-python`; it requires `nautilus-python`, Nautilus GI bindings for either `4.0` or `3.0`, and may need `nautilus -q` after installation. Both integrations preflight drop batches and route conflicts, warnings, errors, and non-clean completion summaries through LinkForge's lightweight Tauri-rendered dialogs instead of platform-native message boxes; clean drop batches exit silently.
 
 ### Windows Explorer Context Menu
 
@@ -99,7 +99,7 @@ Windows 11 top-level menu integration is implemented by `crates/linkforge-contex
 
 ### GNOME Files Context Menu
 
-GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`, which installs and removes the LinkForge `nautilus-python` extension. Nautilus scripts are not installed as a fallback.
+GNOME Files integration is implemented by `crates/linkforge-context-menu-gnome`, which installs and removes the LinkForge `nautilus-python` extension. The extension prefers Nautilus GI `4.0` and falls back to `3.0`; Ubuntu 22.04 / Nautilus 42 uses `gir1.2-nautilus-3.0`. Nautilus scripts are not installed as a fallback.
 
 ## Platform Support
 

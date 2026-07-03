@@ -236,12 +236,12 @@ fn ensure_nautilus_python_available() -> io::Result<()> {
         "import gi",
     )?;
     run_python_check(
-        "Nautilus 4.0 introspection bindings are required",
-        "import gi; gi.require_version('Nautilus', '4.0')",
+        "Nautilus 4.0 or 3.0 introspection bindings are required",
+        "import gi\nfor version in ('4.0', '3.0'):\n    try:\n        gi.require_version('Nautilus', version)\n        break\n    except ValueError:\n        pass\nelse:\n    raise ValueError('Namespace Nautilus not available for version 4.0 or 3.0')",
     )?;
     run_python_check(
-        "nautilus-python is required. Install your distribution's nautilus-python package, then rerun this command.",
-        "import gi; gi.require_version('Nautilus', '4.0'); from gi.repository import Nautilus",
+        "nautilus-python is required with Nautilus 4.0 or 3.0 bindings. Install your distribution's nautilus-python package, then rerun this command.",
+        "import gi\nfor version in ('4.0', '3.0'):\n    try:\n        gi.require_version('Nautilus', version)\n        from gi.repository import Nautilus\n        break\n    except ValueError:\n        pass\nelse:\n    raise ValueError('Namespace Nautilus not available for version 4.0 or 3.0')",
     )
 }
 
@@ -358,10 +358,9 @@ fn executable_candidate_names(command: &str) -> Vec<OsString> {
         return vec![OsString::from(command)];
     }
 
-    let mut candidates = vec![OsString::from(command)];
-
     #[cfg(windows)]
     {
+        let mut candidates = vec![OsString::from(command)];
         let extensions = env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
         for extension in extensions.to_string_lossy().split(';') {
             if extension.is_empty() {
@@ -369,9 +368,13 @@ fn executable_candidate_names(command: &str) -> Vec<OsString> {
             }
             candidates.push(OsString::from(format!("{command}{extension}")));
         }
+        candidates
     }
 
-    candidates
+    #[cfg(not(windows))]
+    {
+        vec![OsString::from(command)]
+    }
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -433,7 +436,19 @@ import subprocess
 
 import gi
 
-gi.require_version("Nautilus", "4.0")
+
+def _require_nautilus():
+    last_error = None
+    for version in ("4.0", "3.0"):
+        try:
+            gi.require_version("Nautilus", version)
+            return
+        except ValueError as error:
+            last_error = error
+    raise last_error
+
+
+_require_nautilus()
 from gi.repository import GObject, Nautilus
 
 
@@ -605,6 +620,7 @@ mod tests {
         let extension = extension_contents("/opt/linkforge/linkforge-gui");
         assert!(extension.contains("class LinkForgeMenuProvider"));
         assert!(extension.contains("Nautilus.MenuProvider"));
+        assert!(extension.contains("for version in (\"4.0\", \"3.0\")"));
         assert!(extension.contains("/opt/linkforge/linkforge-gui"));
         assert!(extension.contains("--context-action"));
         assert!(extension.contains("picked-sources.json"));

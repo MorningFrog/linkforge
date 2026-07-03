@@ -8,7 +8,7 @@ LinkForge is a Cargo workspace with separate crates for the core library, CLI, a
 
 ### Common Commands
 
-```text
+```bash
 cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
@@ -21,7 +21,7 @@ CI runs `cargo fmt -- --check`, `cargo test`, and `cargo clippy --all-targets --
 
 Run the CLI locally with `cargo run -p linkforge-cli --` followed by a LinkForge command:
 
-```text
+```bash
 cargo run -p linkforge-cli -- link-count path/to/file
 cargo run -p linkforge-cli -- same-file path/to/a path/to/b
 cargo run -p linkforge-cli -- scan-groups path/to/root
@@ -33,20 +33,20 @@ cargo run -p linkforge-cli -- batch-symlink --target-dir path/to/target --dry-ru
 
 Run the GUI locally with:
 
-```text
+```bash
 cargo run -p linkforge-gui
 ```
 
 To test GUI context-menu launches without installing file-manager entries:
 
-```text
+```bash
 cargo run -p linkforge-gui -- --context-action link-count --paths path/to/file
 cargo run -p linkforge-gui -- --context-action same-file --paths path/to/a path/to/b
 ```
 
 The shared context-menu launch protocol is:
 
-```text
+```bash
 linkforge-gui --context-action <action> --paths <path>...
 ```
 
@@ -55,52 +55,55 @@ Context-menu entries only launch the GUI and pass context; picked-source state, 
 
 ### Context Menu Integration
 
-Windows Explorer context-menu entries are installed with `scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1` for the Windows 11 top-level menu. GNOME Files advanced entries are installed by the `linkforge-context-menu-gnome` crate.
+Context-menu entries do not implement LinkForge workflows themselves. They
+launch `linkforge-gui --context-action <action> --paths <path>...`, so install a
+packaged GUI first, or build a local GUI artifact and point the context-menu
+installer at it.
+
+For local testing, build the GUI before installing either context-menu
+integration:
+
+```bash
+cargo build -p linkforge-gui
+```
+
+Windows Explorer context-menu entries are installed with
+`scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1`
+for the Windows 11 top-level menu. GNOME Files advanced entries are installed by
+the `linkforge-context-menu-gnome` crate.
 
 #### Windows 11 Top-Level Menu
 
-To locally test the Windows 11 top-level Explorer context menu:
+##### Install
+
+Optionally remove an older local registration before installing:
 
 ```powershell
-cargo build -p linkforge-gui
-cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc
 powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unregister-LinkForgeModernContextMenu.ps1
+```
+
+Then build the shell extension and register the menu:
+
+```powershell
+cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc
 powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1
 Start-Process explorer
 ```
 
-The registration script defaults to debug artifacts. Pass `-Configuration Release` after building release artifacts:
+The registration script defaults to debug artifacts. For release artifacts, build
+with `--release` and pass `-Configuration Release`. Use `-GuiExePath` or
+`-ShellExtDllPath` when testing custom artifact locations.
 
-```powershell
-cargo build -p linkforge-gui --release
-cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release
-powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unregister-LinkForgeModernContextMenu.ps1
-powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -Configuration Release
-```
+##### Test
 
-Use `-GuiExePath` or `-ShellExtDllPath` to point at custom artifacts. The script validates that the GUI executable, shell-extension DLL, staged manifest, and sparse-package registration are present. To diagnose an existing registration without registering again:
+Open a new Explorer window after registration. Right-click one file, exactly two
+files, one directory, and a directory background to confirm the `LinkForge` menu
+appears and launches the GUI. For the two-step workflow, pick one or more
+sources, then create symlinks or hard links in a target directory.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -VerifyOnly
-```
+##### Uninstall
 
-If you intentionally need to stage a GUI executable without strict GUI artifact checks, pass `-SkipGuiCheck`; the shell-extension DLL and registration are still verified.
-
-If a previous registration attempt appears stuck, stop it with `Ctrl+C` before rerunning the command.
-
-Explorer usually notices new per-user context-menu entries in newly opened windows. After changing the GUI, command extension, or sparse-package scripts, rebuild both crates, unregister/register the sparse package again, and test from a newly opened Explorer window so stale COM/DLL state is not reused. If the menu does not appear or old behavior persists, close existing Explorer windows and open a new one. Restart Explorer only as a last resort because it can disrupt open file-manager windows and the desktop shell.
-
-If registration fails with `0x80073D2E`, check that the generated manifest contains `<uap10:AllowExternalContent>true</uap10:AllowExternalContent>`. Sparse packages registered with `-ExternalLocation` must explicitly allow external content.
-
-If registration fails with `0x80073CFF`, enable Developer Mode in Windows Settings under `Settings > System > Advanced > Developer Mode`, then rerun the script. Windows requires Developer Mode or app sideloading to register the sparse package used by the Windows 11 top-level menu.
-
-If registration fails with `0x80070057` and says `x-generate` is not a valid language, update the modern registration script so the manifest uses a concrete resource language such as `en-us`.
-
-Right-click a file to test `Pick Link Source`, `Create Symbolic Link`, `Create Hard Link`, `Show Link Count`, and `Find Hard Link Siblings`. Select exactly two files to test `Compare Same File`. Select multiple files or folders to test `Pick N Link Sources`. Right-click a directory to test `Pick Link Source`, `Create Symlink from ...`, `Create Hard Link from ...`, `Create Symbolic Link`, `Find Hard Link Siblings`, `Scan Hard Link Groups`, and `Clone Tree Preserving Hard Links`. Right-click a directory background to confirm `LinkForge` expands with `Create Symlink from ...` and `Create Hard Link from ...` instead of an empty submenu.
-
-For the two-step workflow, first pick one or more files or folders as sources. Then right-click one target folder or folder background and create symlinks or hard links from the picked sources. Directory sources in a hard-link drop create a hard-link tree: regular files become hard links to the source files and symbolic links are copied as links. A clean drop should create the links and exit without showing any LinkForge window. If a target name already exists, test that only the lightweight Tauri-rendered conflict dialog appears, without the full LinkForge shell, and that its preflight actions include `Overwrite Existing`, `Rename / Review Each`, `Skip Existing`, and `Cancel`. Confirm `Rename / Review Each` opens the per-conflict dialog with rename, overwrite, skip, cancel, applying one choice to remaining conflicts, and `Open LinkForge`. After a non-clean batch, confirm the lightweight summary dialog appears; after clicking `Open LinkForge`, confirm the same window expands into the full LinkForge interface instead of launching a second process.
-
-Remove the Windows 11 top-level context-menu entries after testing:
+Remove the Windows 11 top-level context-menu entries when testing is done:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Unregister-LinkForgeModernContextMenu.ps1
@@ -109,20 +112,45 @@ Start-Process explorer
 
 #### GNOME Files
 
-To locally test GNOME Files advanced context-menu extension installation:
+##### Install
 
-```text
-cargo run -p linkforge-context-menu-gnome -- install
-cargo run -p linkforge-context-menu-gnome -- verify
+The GNOME extension requires `nautilus-python`, PyGObject, and Nautilus GI
+bindings for either `4.0` or `3.0`. Ubuntu 22.04 / Nautilus 42 provides the
+compatible Nautilus 3.0 namespace through `gir1.2-nautilus-3.0`; newer
+distributions may provide `gir1.2-nautilus-4.0`.
+
+Optionally remove an older local extension before installing:
+
+```bash
 cargo run -p linkforge-context-menu-gnome -- uninstall
 ```
 
-Pass `--gui-exe /path/to/linkforge-gui` to `install` when `linkforge-gui` is not on `PATH`.
-Pass the same `--gui-exe` value to `verify` to check an existing installation against that configured GUI executable. The installer validates `python3`, PyGObject, Nautilus introspection bindings, `nautilus-python`, and that the configured GUI executable can be resolved without launching the GUI. Use `--skip-gui-check` only for packaging or special environments where the GUI path is expected to become valid later.
+Then install the extension, pointing it at the local GUI artifact when
+`linkforge-gui` is not already installed on `PATH`:
 
-The GNOME extension requires `nautilus-python`. Restart GNOME Files with `nautilus -q` after installing or uninstalling if the menu does not refresh.
-After installing, select exactly two files in GNOME Files to test `Compare Same File` from the LinkForge advanced menu.
-Also test selecting multiple files or folders, choosing `Pick N Link Sources`, and dropping them into one target folder with `Create Symlink...` or `Create Hard Link...`. Clean drops should exit silently. If a target name already exists or a non-clean result occurs, confirm the lightweight Tauri-rendered dialog matches the Windows flow.
+```bash
+cargo run -p linkforge-context-menu-gnome -- install --gui-exe target/debug/linkforge-gui
+nautilus -q
+```
+
+Use `--skip-gui-check` only for packaging or special environments where the GUI
+path is expected to become valid later.
+
+##### Test
+
+After restarting GNOME Files, select one file, exactly two files, one directory,
+and a directory background to confirm the `LinkForge` menu appears and launches
+the GUI. Also test picking one or more sources and dropping them into a target
+folder.
+
+##### Uninstall
+
+Remove the GNOME Files extension when testing is done:
+
+```bash
+cargo run -p linkforge-context-menu-gnome -- uninstall
+nautilus -q
+```
 
 ### Shell Completions
 
@@ -146,7 +174,7 @@ The completion command prints scripts to stdout and does not modify shell profil
 
 To manually test CLI batch creation:
 
-```text
+```bash
 cargo run -p linkforge-cli -- batch-hardlink --target-dir path/to/target path/to/file-a path/to/file-b
 cargo run -p linkforge-cli -- batch-hardlink --target-dir path/to/target --on-conflict rename path/to/file
 cargo run -p linkforge-cli -- batch-symlink --target-dir path/to/target --dry-run path/to/file
@@ -172,7 +200,7 @@ Git commit messages in this project must follow the Conventional Commits specifi
 
 Recommended format:
 
-```text
+```gitcommit
 <type>(optional scope): <description>
 ```
 
@@ -187,7 +215,7 @@ Common types include:
 
 Examples:
 
-```text
+```gitcommit
 feat(cli): add symlink creation command
 fix(core): handle existing target path on Windows
 docs: update platform support notes
