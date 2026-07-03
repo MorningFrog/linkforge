@@ -138,7 +138,7 @@ fn install(gui_exe: &str, skip_gui_check: bool) -> io::Result<()> {
     fs::create_dir_all(&target_dir)?;
 
     let path = target_dir.join(EXTENSION_FILE_NAME);
-    fs::write(&path, extension_contents(gui_exe))?;
+    fs::write(&path, extension_contents(&gui_check.extension_gui_exe()))?;
 
     if !path.is_file() {
         return Err(io::Error::other(format!(
@@ -175,7 +175,7 @@ fn verify(gui_exe: &str, skip_gui_check: bool) -> io::Result<()> {
     }
 
     let contents = fs::read_to_string(&path)?;
-    verify_extension_contents(&contents, gui_exe)?;
+    verify_extension_contents(&contents, &gui_check.extension_gui_exe())?;
 
     println!("Verified LinkForge GNOME Files extension:");
     println!("  {}", path.display());
@@ -259,6 +259,15 @@ struct GuiCheck {
     configured: String,
     resolved: Option<PathBuf>,
     skipped: bool,
+}
+
+impl GuiCheck {
+    fn extension_gui_exe(&self) -> String {
+        self.resolved
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| self.configured.clone())
+    }
 }
 
 fn check_gui_exe(gui_exe: &str, skip_gui_check: bool) -> io::Result<GuiCheck> {
@@ -414,6 +423,9 @@ fn verify_extension_contents(contents: &str, gui_exe: &str) -> io::Result<()> {
         "def _pick_sources(paths):",
         "if _pick_sources(paths):",
         "def _file_is_directory(file_info, path):",
+        "drop-symlink",
+        "drop-hardlink",
+        "--context-background",
     ] {
         if !contents.contains(marker) {
             return Err(io::Error::new(
@@ -733,6 +745,41 @@ mod tests {
         assert_eq!(check.configured, "definitely-not-installed-linkforge-gui");
         assert!(check.skipped);
         assert!(check.resolved.is_none());
+        assert_eq!(
+            check.extension_gui_exe(),
+            "definitely-not-installed-linkforge-gui"
+        );
+    }
+
+    #[test]
+    fn checked_relative_gui_exe_uses_resolved_path_for_extension() {
+        let fixture = executable_fixture("relative-gui-extension");
+        let relative = fixture.relative.display().to_string();
+        let expected = fixture.path.canonicalize().unwrap();
+
+        let check = check_gui_exe(&relative, false).unwrap();
+
+        assert_eq!(check.configured, relative);
+        assert!(!check.skipped);
+        assert_eq!(check.resolved.as_deref(), Some(expected.as_path()));
+        assert_eq!(PathBuf::from(check.extension_gui_exe()), expected);
+    }
+
+    #[test]
+    fn relative_gui_exe_verification_uses_resolved_path() {
+        let fixture = executable_fixture("relative-gui-verify");
+        let relative = fixture.relative.display().to_string();
+        let check = check_gui_exe(&relative, false).unwrap();
+        let resolved = check.extension_gui_exe();
+        let extension = extension_contents(&resolved);
+
+        verify_extension_contents(&extension, &resolved).unwrap();
+        assert_eq!(
+            verify_extension_contents(&extension, &relative)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
     }
 
     #[test]
@@ -759,5 +806,63 @@ mod tests {
         let error =
             verify_extension_contents(&old_extension, "/opt/linkforge/linkforge-gui").unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        let old_extension = extension.replace("drop-symlink", "drop_symlink");
+        let error =
+            verify_extension_contents(&old_extension, "/opt/linkforge/linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        let old_extension = extension.replace(
+            "def _file_is_directory(file_info, path):",
+            "def _old_file_is_directory(file_info, path):",
+        );
+        let error =
+            verify_extension_contents(&old_extension, "/opt/linkforge/linkforge-gui").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    struct ExecutableFixture {
+        path: PathBuf,
+        relative: PathBuf,
+    }
+
+    impl Drop for ExecutableFixture {
+        fn drop(&mut self) {
+            if let Some(parent) = self.path.parent() {
+                let _ = fs::remove_dir_all(parent);
+                if let Some(root) = parent.parent() {
+                    let _ = fs::remove_dir(root);
+                }
+            }
+        }
+    }
+
+    fn executable_fixture(name: &str) -> ExecutableFixture {
+        let relative = PathBuf::from("target")
+            .join("linkforge-context-menu-gnome-tests")
+            .join(format!("{}-{}", name, std::process::id()))
+            .join(executable_file_name());
+        let path = env::current_dir().unwrap().join(&relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&path, b"#!/bin/sh\nexit 0\n").unwrap();
+
+        #[cfg(unix)]
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+
+        ExecutableFixture { path, relative }
+    }
+
+    fn executable_file_name() -> &'static str {
+        #[cfg(windows)]
+        {
+            "linkforge-gui.exe"
+        }
+
+        #[cfg(not(windows))]
+        {
+            "linkforge-gui"
+        }
     }
 }

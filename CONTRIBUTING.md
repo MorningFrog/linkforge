@@ -55,13 +55,9 @@ Apart from GNOME's direct `pick-source` state write, context-menu entries only l
 
 ### Context Menu Integration
 
-Context-menu entries do not implement LinkForge workflows themselves. They
-launch `linkforge-gui --context-action <action> --paths <path>...`, so install a
-packaged GUI first, or build a local GUI artifact and point the context-menu
-installer at it.
+Context-menu entries do not implement LinkForge workflows themselves. They launch `linkforge-gui --context-action <action> --paths <path>...`, so install a packaged GUI first, or build a local GUI artifact and point the context-menu installer at it.
 
-For local testing, build the GUI before installing either context-menu
-integration:
+For local testing, build the GUI before installing either context-menu integration:
 
 ```bash
 cargo build -p linkforge-gui
@@ -87,16 +83,11 @@ powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Reg
 Start-Process explorer
 ```
 
-The registration script defaults to debug artifacts. For release artifacts, build
-with `--release` and pass `-Configuration Release`. Use `-GuiExePath` or
-`-ShellExtDllPath` when testing custom artifact locations.
+The registration script defaults to debug artifacts. For release artifacts, build with `--release` and pass `-Configuration Release`. Use `-GuiExePath` or `-ShellExtDllPath` when testing custom artifact locations.
 
 ##### Test
 
-Open a new Explorer window after registration. Right-click one file, exactly two
-files, one directory, and a directory background to confirm the `LinkForge` menu
-appears and launches the GUI. For the two-step workflow, pick one or more
-sources, then create symlinks or hard links in a target directory.
+Open a new Explorer window after registration. Right-click one file, exactly two files, one directory, and a directory background to confirm the `LinkForge` menu appears and launches the GUI. For the two-step workflow, pick one or more sources, then create symlinks or hard links in a target directory.
 
 ##### Uninstall
 
@@ -111,10 +102,7 @@ Start-Process explorer
 
 ##### Install
 
-The GNOME extension requires `nautilus-python`, PyGObject, and Nautilus GI
-bindings for either `4.0` or `3.0`. Ubuntu 22.04 / Nautilus 42 provides the
-compatible Nautilus 3.0 namespace through `gir1.2-nautilus-3.0`; newer
-distributions may provide `gir1.2-nautilus-4.0`.
+The GNOME extension requires `nautilus-python`, PyGObject, and Nautilus GI bindings for either `4.0` or `3.0`. Ubuntu 22.04 / Nautilus 42 provides the compatible Nautilus 3.0 namespace through `gir1.2-nautilus-3.0`; newer distributions may provide `gir1.2-nautilus-4.0`.
 
 Optionally remove an older local extension before installing:
 
@@ -122,16 +110,14 @@ Optionally remove an older local extension before installing:
 cargo run -p linkforge-context-menu-gnome -- uninstall
 ```
 
-Then install the extension, pointing it at the local GUI artifact when
-`linkforge-gui` is not already installed on `PATH`:
+Then install the extension, pointing it at the local GUI artifact when `linkforge-gui` is not already installed on `PATH`:
 
 ```bash
 cargo run -p linkforge-context-menu-gnome -- install --gui-exe target/debug/linkforge-gui
 nautilus -q
 ```
 
-Use `--skip-gui-check` only for packaging or special environments where the GUI
-path is expected to become valid later.
+When GUI checking is enabled, the installer writes the resolved absolute GUI executable path into the Nautilus extension so GNOME Files can launch LinkForge from any working directory. Use `--skip-gui-check` only for packaging or special environments where the GUI path is expected to become valid later.
 
 ##### Test
 

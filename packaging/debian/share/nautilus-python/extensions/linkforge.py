@@ -31,7 +31,8 @@ def _picked_sources_state_path():
 def _picked_source_state_dir():
     state_home = os.environ.get("XDG_STATE_HOME")
     if not state_home:
-        state_home = os.path.join(os.path.expanduser("~"), ".local", "state")
+        home = os.path.expanduser("~")
+        state_home = os.path.join(home, ".local", "state")
     return os.path.join(state_home, "LinkForge")
 
 
@@ -47,7 +48,18 @@ def _picked_sources():
             return _existing_paths([path for path in paths if isinstance(path, str)])
     except (OSError, ValueError):
         return []
-    return []
+
+
+def _pick_sources(paths):
+    if not paths or len(_existing_paths(paths)) != len(paths):
+        return False
+    state_path = _picked_sources_state_path()
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    temporary_path = f"{state_path}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as handle:
+        json.dump(paths, handle)
+    os.replace(temporary_path, state_path)
+    return True
 
 
 def _picked_source_label(kind, picked):
@@ -65,6 +77,15 @@ def _picked_source_label(kind, picked):
 def _file_path(file_info):
     location = file_info.get_location()
     return location.get_path() if location else None
+
+
+def _file_is_directory(file_info, path):
+    try:
+        if file_info.is_directory():
+            return True
+    except (AttributeError, TypeError):
+        pass
+    return bool(path and os.path.isdir(path))
 
 
 def _first_name(paths):
@@ -94,19 +115,23 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
             return []
 
         first = files[0]
-        first_is_dir = first.is_directory()
+        first_is_dir = _file_is_directory(first, paths[0])
         picked = _picked_sources()
         items = []
 
-        name = _first_name(paths)
-        label = f"Pick {len(paths)} Link Sources" if len(paths) > 1 else f"Pick Link Source: {name}"
-        items.append(self._action_item("pick-source", label, "pick-source", paths))
+        if len(paths) >= 1:
+            name = _first_name(paths)
+            if len(paths) > 1:
+                label = f"Pick {len(paths)} Link Sources"
+            else:
+                label = f"Pick Link Source: {name}" if name else "Pick Link Source"
+            items.append(self._action_item("pick-source", label, "pick-source", paths))
 
         if len(paths) == 1 and first_is_dir and picked:
             items.append(self._action_item("drop-symlink", _picked_source_label("Symlink", picked), "drop-symlink", [paths[0]]))
             items.append(self._action_item("drop-hardlink", _picked_source_label("Hard Link", picked), "drop-hardlink", [paths[0]]))
 
-        if len(files) == 2 and len(paths) == 2 and all(not file_info.is_directory() for file_info in files):
+        if len(files) == 2 and len(paths) == 2 and all(not _file_is_directory(file_info, path) for file_info, path in zip(files, paths)):
             items.append(self._action_item("same-file", "Compare Same File", "same-file", paths))
 
         if len(paths) == 1:
@@ -129,13 +154,17 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
             return []
 
         items = [
-            self._action_item("drop-symlink-background", _picked_source_label("Symlink", picked), "drop-symlink", [path], True),
-            self._action_item("drop-hardlink-background", _picked_source_label("Hard Link", picked), "drop-hardlink", [path], True),
+            self._action_item("drop-symlink-background", _picked_source_label("Symlink", picked), "drop-symlink", [path], True)
         ]
+        items.append(self._action_item("drop-hardlink-background", _picked_source_label("Hard Link", picked), "drop-hardlink", [path], True))
         return [self._root_item(items)]
 
     def _root_item(self, items):
-        root = Nautilus.MenuItem(name="LinkForge::Root", label="LinkForge", tip="Open LinkForge actions")
+        root = Nautilus.MenuItem(
+            name="LinkForge::Root",
+            label="LinkForge",
+            tip="Open LinkForge actions",
+        )
         submenu = Nautilus.Menu()
         for item in items:
             submenu.append_item(item)
@@ -143,9 +172,19 @@ class LinkForgeMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         return root
 
     def _action_item(self, name, label, action, paths, background=False):
-        item = Nautilus.MenuItem(name=f"LinkForge::{name}", label=label, tip="Open LinkForge")
+        item = Nautilus.MenuItem(
+            name=f"LinkForge::{name}",
+            label=label,
+            tip="Open LinkForge",
+        )
         item.connect("activate", self._activate, action, paths, background)
         return item
 
     def _activate(self, _menu, action, paths, background):
+        if action == "pick-source":
+            try:
+                if _pick_sources(paths):
+                    return
+            except OSError:
+                pass
         _run_action(action, paths, background)
