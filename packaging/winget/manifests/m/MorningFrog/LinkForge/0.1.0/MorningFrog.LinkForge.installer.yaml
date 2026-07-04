@@ -4,7 +4,7 @@ PackageVersion: "0.1.0"
 InstallerType: nullsoft
 Scope: user
 UpgradeBehavior: install
-ReleaseDate: "2026-07-02"
+ReleaseDate: "2026-07-04"
 Commands:
   - linkforge
   - linkforge-gui

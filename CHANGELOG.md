@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-07-04
 
 Initial pre-release for LinkForge, focused on creating, inspecting, and managing symbolic links and hard links from the CLI, GUI, and supported file managers.
 

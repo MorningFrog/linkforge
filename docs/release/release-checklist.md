@@ -24,8 +24,9 @@ This checklist intentionally stops before public package-manager submission. Do 
 - [ ] Build release CLI: `cargo build -p linkforge-cli --release`.
 - [ ] Build release GUI / Tauri bundle.
 - [ ] Build release shell extension: `cargo build -p linkforge-context-menu-windows --target x86_64-pc-windows-msvc --release`.
+- [ ] Build the unsigned Windows GitHub release installer: `powershell -ExecutionPolicy Bypass -File scripts/release/build-windows-assets.ps1`.
 - [ ] Prepare and validate the Windows context-menu sparse-package staging without registration: `powershell -ExecutionPolicy Bypass -File scripts/context-menu/windows/modern/Register-LinkForgeModernContextMenu.ps1 -Configuration Release -PrepareOnly -StagingDir target/linkforge-modern-context-menu-release`, then run `scripts/validate-release-drafts.ps1 -RequireWindowsAppxManifest -WindowsAppxManifest target/linkforge-modern-context-menu-release/AppxManifest.xml`.
-- [ ] Produce a Tauri NSIS x64 installer that installs CLI, GUI, shell-extension DLL, icons/resources, and registers the Windows 11 context menu.
+- [ ] Produce an NSIS x64 installer that installs the CLI, Tauri GUI, shell-extension DLL, icons/resources, and registers the Windows 11 context menu.
 - [ ] Sign `linkforge.exe`, `linkforge-gui.exe`, `linkforge_context_menu_windows.dll`, and the installer with Authenticode and timestamping.
 - [ ] Verify signatures in CI or a clean Windows validation machine.
 - [ ] Generate SHA256 checksums.

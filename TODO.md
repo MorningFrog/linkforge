@@ -13,8 +13,8 @@
 
 ## P0: Windows winget Preparation
 
-- [x] Choose the Windows installer strategy for winget. Prefer a Tauri NSIS or MSI installer that can install `linkforge`, `linkforge-gui`, the Windows shell-extension DLL, required icons/resources, and context-menu registration from a public release artifact.
-- [ ] Ensure the Windows installer supports unattended install, silent-with-progress install, unattended uninstall, upgrade over an existing version, deterministic exit codes, and no forced reboot. Record the exact switches required by winget.
+- [x] Choose the Windows installer strategy for winget. Use an NSIS x64 installer that can install `linkforge`, `linkforge-gui`, the Windows shell-extension DLL, required icons/resources, and context-menu registration from a public release artifact.
+- [x] Ensure the Windows installer supports unattended install, silent-with-progress install, unattended uninstall, upgrade over an existing version, deterministic exit codes, and no forced reboot. Record the exact switches required by winget.
 - [x] Decide Windows signing requirements before public distribution: Authenticode certificate, signed GUI executable, signed CLI executable, signed shell-extension DLL, signed installer, timestamping, and how signatures are verified in CI.
 - [x] Add a draft winget manifest tree under `packaging/winget/` with package identifier, version, installer URL, SHA256 hash, installer type, architecture, scope, commands, apps/features, release notes URL, license URL, tags, moniker, and locale metadata. Reference: https://learn.microsoft.com/en-us/windows/package-manager/package/manifest
 - [ ] Validate the winget draft locally with current tooling, including manifest validation, hash verification, `winget install --manifest <path> --silent`, upgrade testing, uninstall testing, and a Windows Sandbox clean-machine smoke test. Reference: https://learn.microsoft.com/en-us/windows/package-manager/winget/install
@@ -49,7 +49,7 @@
 - [x] Make hard-link sibling UX platform-aware by using `siblingsRequiresRoot` in the frontend to require or prefill scan roots where needed and keep the Windows path simple.
 - [x] Reconcile documentation drift around GNOME context-menu installation, especially the stale `scripts/context-menu/gnome` reference in `AGENTS.md`.
 - [x] Add packaging CI jobs that build draft artifacts without publishing: Windows context-menu sparse-package staging, Linux deb package, Flatpak bundle, checksums, and validation reports uploaded as CI artifacts.
-- [ ] Extend packaging CI to build the final Tauri NSIS installer and verify signatures once signing inputs and installer bundling are available.
+- [ ] Extend packaging CI to build the final NSIS installer and verify signatures once signing inputs and installer bundling are available.
 - [ ] Add package install/upgrade/remove integration tests for each prepared channel so installer regressions are caught before public release.
 
 ## P2: Usability Improvements

@@ -175,6 +175,8 @@ Release and packaging work must follow the preparation-only policy in `docs/rele
 
 Before release packaging work is considered ready for manual smoke testing, run `powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1` on Windows or `bash scripts/validate-release-drafts.sh` on Linux. The non-publishing `.github/workflows/release-drafts.yml` workflow builds draft Windows context-menu staging artifacts, Debian packages, a Flatpak bundle, checksums, and validation reports for review.
 
+To build the unsigned Windows x64 GitHub release installer locally, install NSIS so `makensis` is available on `PATH`, then run `powershell -ExecutionPolicy Bypass -File scripts/release/build-windows-assets.ps1`. The installer stages `linkforge.exe`, `linkforge-gui.exe`, the Windows Explorer shell-extension DLL, and the Windows 11 context-menu registration scripts under `target/release-assets/windows/`.
+
 ## Git Commit Message
 
 Git commit messages in this project must follow the Conventional Commits specification.

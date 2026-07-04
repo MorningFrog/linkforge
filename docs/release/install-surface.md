@@ -17,7 +17,7 @@ Native packages should install the complete LinkForge desktop tool by default. O
 
 ## Channel Decisions
 
-- Windows winget uses a Tauri NSIS x64 installer as the public installer strategy.
+- Windows winget uses an NSIS x64 installer that installs the CLI, Tauri GUI, and Windows Explorer context menu as the public installer strategy.
 - Debian/Ubuntu packaging uses an Ubuntu PPA as the first apt-compatible path. Official Debian packaging is documented for later sponsor/maintainer work.
 - Flatpak uses `io.github.morningfrog.LinkForge` and provides the GUI/CLI inside the sandbox, but does not install host GNOME Files integration. Users who need file-manager integration should install native deb/rpm packages.
 

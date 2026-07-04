@@ -4,7 +4,7 @@ This directory contains release-preparation assets only. Do not submit these man
 
 Current decisions:
 
-- Windows package-manager preparation targets winget through a Tauri NSIS x64 installer.
+- Windows package-manager preparation targets winget through an NSIS x64 installer that includes the CLI, Tauri GUI, and Windows Explorer context-menu integration.
 - Ubuntu PPA is the first practical apt-compatible path. Debian official packaging is documented for later sponsor/maintainer work; the actual Debian metadata lives in the repository-root `debian/` directory, with notes in `packaging/debian/`.
 - Flatpak uses `io.github.morningfrog.LinkForge` and does not provide host GNOME Files integration.
 

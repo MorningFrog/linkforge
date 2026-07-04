@@ -2,7 +2,7 @@
 
 Package ID: `MorningFrog.LinkForge`
 
-Installer strategy: Tauri NSIS x64 installer.
+Installer strategy: NSIS x64 installer that includes the CLI, Tauri GUI, and Windows Explorer context-menu integration.
 
 The installer is expected to install:
 
@@ -24,13 +24,14 @@ SilentWithProgress: /S
 UninstallSilent: /S
 ```
 
-These switches must be validated against the final Tauri NSIS artifact before winget submission.
+These switches must be validated against the final NSIS artifact before winget submission.
 
 ## Local Validation
 
 After producing a release artifact:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts/release/build-windows-assets.ps1
 powershell -ExecutionPolicy Bypass -File scripts/validate-release-drafts.ps1
 winget validate packaging/winget/manifests/m/MorningFrog/LinkForge/0.1.0
 winget install --manifest packaging/winget/manifests/m/MorningFrog/LinkForge/0.1.0 --silent
@@ -39,6 +40,8 @@ winget uninstall MorningFrog.LinkForge --silent
 ```
 
 The draft manifest currently keeps an all-zero `InstallerSha256` and future GitHub release URL as placeholders. `winget validate` may pass, but `winget install --manifest` must not be used until those fields are replaced with a real release artifact URL and SHA256.
+
+The local GitHub release installer is written to `target/release-assets/windows/LinkForge_0.1.0_x64-setup.exe` and is unsigned until Authenticode signing inputs are available.
 
 Also validate in Windows Sandbox:
 

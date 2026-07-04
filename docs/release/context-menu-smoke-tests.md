@@ -6,15 +6,31 @@ Record real end-to-end results here for each release candidate. Do not mark a te
 
 Environment:
 
-- Date:
-- Windows version:
-- LinkForge version:
-- Installer or build artifact:
-- Tester:
+- Date: 2026-07-04T14:43:11+08:00
+- Windows version: Microsoft Windows 11 Professional, version 10.0.26200.
+- LinkForge version: 0.1.0.
+- Installer or build artifact: `target/release-assets/windows/LinkForge_0.1.0_x64-setup.exe`, unsigned local NSIS installer.
+- Tester: Codex-assisted local automated installer smoke.
+
+Automated installer lifecycle precheck:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Silent install `/S` | Pass | Installer exited 0 and created `%LOCALAPPDATA%\Programs\LinkForge`. |
+| Installed release files | Pass | `linkforge.exe`, `linkforge-gui.exe`, `linkforge_context_menu_windows.dll`, and `Uninstall.exe` were present. |
+| Explorer context-menu package registration | Pass | `Get-AppxPackage -Name LinkForge.ContextMenu` found the sparse package after install. |
+| CLI launch | Pass | Installed `linkforge.exe --help` exited 0. |
+| GUI launch | Pass | Installed `linkforge-gui.exe` started and was closed by the smoke script. |
+| Same-version install-over | Pass | Running the same installer with `/S` again exited 0 and left installed files available. |
+| Silent uninstall `/S` | Pass | Uninstaller exited 0, removed the sparse package, and removed the install directory. |
+| User PATH cleanup | Pass | Install directory was absent from the user PATH after uninstall. |
+| Forced reboot | Pass | Silent install and uninstall completed without reboot request or pending-reboot exit code. |
+
+Manual Explorer menu release gate:
 
 | Scenario | Result | Notes |
 | --- | --- | --- |
-| Register modern sparse package from release artifact | Not run | |
+| Register modern sparse package from release artifact | Pass | Covered by automated installer lifecycle precheck; visual Explorer menu confirmation still belongs to the manual scenarios below. |
 | Right-click one file and pick source | Not run | |
 | Right-click multiple files/folders and pick N sources | Not run | |
 | Drop picked source into a target folder as symlink | Not run | |
@@ -32,7 +48,7 @@ Environment:
 | Scan Hard Link Groups works for a directory | Not run | |
 | Clone Tree Preserving Hard Links opens clone view | Not run | |
 | Directory background drop actions appear only with picked sources | Not run | |
-| Unregister removes Explorer menu | Not run | |
+| Unregister removes Explorer menu | Pass | Covered by automated installer lifecycle precheck through sparse-package removal after uninstall; visual Explorer menu confirmation still remains manual. |
 
 ## GNOME Files Advanced Menu
 
