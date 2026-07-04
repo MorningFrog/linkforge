@@ -18,6 +18,72 @@ LinkForge currently supports these core and CLI features:
 
 The GUI exposes the same file-link management and inspection features through a Tauri desktop app and reuses the same core batch-link workflow as the CLI. Shell completion generation remains a CLI-only helper.
 
+## Install From GitHub Releases
+
+The current public build is the `v0.1.0` GitHub pre-release: <https://github.com/MorningFrog/linkforge/releases/tag/v0.1.0>.
+
+Download `SHA256SUMS.txt` from the release and compare the SHA256 value for each downloaded asset before installing. On Windows, run `Get-FileHash -Algorithm SHA256 <asset>` and compare the result with `SHA256SUMS.txt`. On Linux, run `sha256sum <asset>` and compare the result with `SHA256SUMS.txt`.
+
+### Windows x64
+
+Download `LinkForge_0.1.0_x64-setup.exe` from the release page and run it.
+
+```powershell
+.\LinkForge_0.1.0_x64-setup.exe
+```
+
+The Windows installer is unsigned for this pre-release, so Windows SmartScreen or unknown-publisher prompts are expected. The installer is user-scoped, installs `linkforge.exe`, `linkforge-gui.exe`, and the Windows 11 Explorer context-menu integration, and adds the install directory to the user `PATH`. Silent install and uninstall use `/S`.
+
+```powershell
+.\LinkForge_0.1.0_x64-setup.exe /S
+& "$env:LOCALAPPDATA\Programs\LinkForge\Uninstall.exe" /S
+```
+
+### Debian / Ubuntu amd64
+
+Download these four `.deb` assets from the release page into the same directory:
+
+- `linkforge_0.1.0-0ubuntu1_all.deb`
+- `linkforge-cli_0.1.0-0ubuntu1_amd64.deb`
+- `linkforge-gui_0.1.0-0ubuntu1_amd64.deb`
+- `linkforge-context-menu-gnome_0.1.0-0ubuntu1_amd64.deb`
+
+Install them together with `apt` so runtime dependencies can be resolved by the system package manager.
+
+```bash
+sudo apt install ./linkforge-cli_0.1.0-0ubuntu1_amd64.deb ./linkforge-gui_0.1.0-0ubuntu1_amd64.deb ./linkforge-context-menu-gnome_0.1.0-0ubuntu1_amd64.deb ./linkforge_0.1.0-0ubuntu1_all.deb
+```
+
+The native packages install the CLI, GUI, shell completions, desktop metadata, icons, and GNOME Files context-menu integration. Restart GNOME Files after installation if the menu is not visible immediately.
+
+```bash
+nautilus -q
+```
+
+To remove the native packages:
+
+```bash
+sudo apt purge linkforge linkforge-cli linkforge-gui linkforge-context-menu-gnome
+```
+
+### Flatpak x86_64
+
+Download `LinkForge_0.1.0_x86_64.flatpak` from the release page and install it locally.
+
+```bash
+flatpak install --user ./LinkForge_0.1.0_x86_64.flatpak
+flatpak run io.github.morningfrog.LinkForge
+```
+
+The Flatpak bundle is experimental for the GitHub pre-release and is not a Flathub submission artifact. It provides the GUI and CLI inside the sandbox, but it does not install host GNOME Files integration; use the native Debian/Ubuntu packages when file-manager integration is needed.
+
+```bash
+flatpak run --command=linkforge io.github.morningfrog.LinkForge --help
+flatpak uninstall --user io.github.morningfrog.LinkForge
+```
+
+Package-manager submissions are not available for this pre-release. Do not expect winget, Flathub, Debian, Ubuntu PPA, or other repository installation paths until a later explicitly approved release.
+
 ## CLI Usage
 
 ```text
