@@ -46,7 +46,6 @@
 
 - [ ] Add automated frontend or Tauri end-to-end coverage for initial context routing, lightweight modal flows, preflight choices, per-conflict resolution, `Open LinkForge` expansion, and non-clean result summaries.
 - [x] Add automated checks for installer and registration artifacts, especially the generated Windows Appx manifest and PowerShell registration/unregistration scripts.
-- [ ] Define and test partial-failure handling for `clone-tree`, hard-link tree creation, and batch directory operations so interrupted or nested failures do not leave unclear results.
 - [x] Make hard-link sibling UX platform-aware by using `siblingsRequiresRoot` in the frontend to require or prefill scan roots where needed and keep the Windows path simple.
 - [x] Reconcile documentation drift around GNOME context-menu installation, especially the stale `scripts/context-menu/gnome` reference in `AGENTS.md`.
 - [x] Add packaging CI jobs that build draft artifacts without publishing: Windows context-menu sparse-package staging, Linux deb package, Flatpak bundle, checksums, and validation reports uploaded as CI artifacts.
