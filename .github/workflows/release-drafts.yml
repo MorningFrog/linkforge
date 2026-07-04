@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload Windows validation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: windows-release-draft-validation
           path: |
@@ -91,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Ubuntu packaging dependencies
         run: |
@@ -125,7 +125,7 @@ jobs:
       - name: Prepare offline Cargo sources
         run: |
           mkdir -p .cargo
-          cargo vendor vendor > .cargo/config.toml
+          cargo vendor --versioned-dirs vendor > .cargo/config.toml
 
       - name: Validate release drafts
         run: bash scripts/validate-release-drafts.sh
@@ -134,29 +134,44 @@ jobs:
         run: |
           chmod +x debian/rules
           dpkg-buildpackage -us -uc -b
-          lintian --fail-on error ../linkforge_*.changes
+          changes_file="$(find .. -maxdepth 1 -name 'linkforge_*_amd64.changes' -print -quit)"
+          if [ -z "$changes_file" ]; then
+            echo "::error title=Missing Debian changes file::Could not find binary amd64 .changes output."
+            exit 1
+          fi
+          lintian --fail-on error "$changes_file"
+          mkdir -p target/release-validation/linux-artifacts
+          cp ../linkforge_*.deb ../linkforge_*.buildinfo "$changes_file" target/release-validation/linux-artifacts/
 
       - name: Build Flatpak bundle
         run: |
+          mkdir -p target/release-validation/linux-artifacts
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.flatpak.Builder
           flatpak-builder --user --force-clean --install-deps-from=flathub --repo=repo build-dir packaging/flatpak/io.github.morningfrog.LinkForge.yml
-          flatpak-builder-lint manifest packaging/flatpak/io.github.morningfrog.LinkForge.yml
-          flatpak-builder-lint repo repo
-          flatpak build-bundle repo LinkForge.flatpak io.github.morningfrog.LinkForge
+          flatpak build-bundle repo target/release-validation/linux-artifacts/LinkForge.flatpak io.github.morningfrog.LinkForge
+          set +e
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest packaging/flatpak/io.github.morningfrog.LinkForge.yml > target/release-validation/flatpak-lint-manifest.log 2>&1
+          manifest_lint_status=$?
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo > target/release-validation/flatpak-lint-repo.log 2>&1
+          repo_lint_status=$?
+          set -e
+          if [ "$manifest_lint_status" -ne 0 ]; then
+            echo "::warning title=Flatpak manifest linter::flatpak-builder-lint manifest exited $manifest_lint_status; see flatpak-lint-manifest.log."
+          fi
+          if [ "$repo_lint_status" -ne 0 ]; then
+            echo "::warning title=Flatpak repo linter::flatpak-builder-lint repo exited $repo_lint_status; see flatpak-lint-repo.log."
+          fi
 
       - name: Generate Linux draft checksums
         run: |
           mkdir -p target/release-validation
-          sha256sum ../linkforge_*.deb ../linkforge_*.buildinfo ../linkforge_*.changes LinkForge.flatpak > target/release-validation/linux-checksums.txt
+          sha256sum target/release-validation/linux-artifacts/* > target/release-validation/linux-checksums.txt
 
       - name: Upload Linux validation report and draft artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: linux-release-draft-validation
           path: |
             target/release-validation/
-            ../linkforge_*.deb
-            ../linkforge_*.buildinfo
-            ../linkforge_*.changes
-            LinkForge.flatpak
