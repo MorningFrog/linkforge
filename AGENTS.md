@@ -39,6 +39,10 @@ When a change may affect API compatibility, stop and ask the user how to proceed
 
 Fallbacks should only be kept when they are explicitly required for a known, current compatibility target or when the user asks for them. Avoid speculative compatibility code.
 
+## Missing Tooling Policy
+
+If a task requires software, system packages, command-line tools, SDKs, package managers, signing tools, GUI/file-manager components, or other external tooling that is not already installed and available in the current environment, stop the task immediately and tell the user exactly what is missing and how to install or enable it. Prefer official installers, package-manager commands, or project-documented setup steps when giving installation guidance. Do not install tools, auto-download dependencies, switch to a compatibility fallback, use a CI-only workaround, or keep trying alternate paths unless the user explicitly resumes the task after providing the required tooling.
+
 ## Markdown Formatting
 
 When writing or editing Markdown files, keep normal prose and list items on a single line unless a hard line break is semantically required. In Markdown, a single newline usually renders like a space, so avoid inserting visual-wrap line breaks in paragraphs, bullets, or similar text. Preserve intentional structure such as blank lines between paragraphs, code blocks, tables, and explicit line breaks.
