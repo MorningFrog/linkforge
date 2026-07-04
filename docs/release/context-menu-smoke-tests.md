@@ -10,7 +10,7 @@ Environment:
 - Windows version: Microsoft Windows 11 Professional, version 10.0.26200.
 - LinkForge version: 0.1.0.
 - Installer or build artifact: `target/release-assets/windows/LinkForge_0.1.0_x64-setup.exe`, unsigned local NSIS installer.
-- Tester: Codex-assisted local automated installer smoke.
+- Tester: Codex-assisted local automated installer smoke plus user manual Explorer release-gate validation.
 
 Automated installer lifecycle precheck:
 
@@ -30,61 +30,61 @@ Manual Explorer menu release gate:
 
 | Scenario | Result | Notes |
 | --- | --- | --- |
-| Register modern sparse package from release artifact | Pass | Covered by automated installer lifecycle precheck; visual Explorer menu confirmation still belongs to the manual scenarios below. |
-| Right-click one file and pick source | Not run | |
-| Right-click multiple files/folders and pick N sources | Not run | |
-| Drop picked source into a target folder as symlink | Not run | |
-| Drop picked source into a target folder as hard link | Not run | |
-| Drop picked directory as hard-link tree | Not run | |
-| Existing target conflict opens lightweight dialog | Not run | |
-| Rename / review each conflict flow works | Not run | |
-| Overwrite, skip, cancel, and apply-to-remaining choices work | Not run | |
-| Clean drop exits silently with no full GUI | Not run | |
-| Non-clean result shows lightweight summary | Not run | |
-| Open LinkForge expands lightweight window into full UI | Not run | |
-| Compare Same File appears for exactly two files | Not run | |
-| Show Link Count works for a file | Not run | |
-| Find Hard Link Siblings works | Not run | |
-| Scan Hard Link Groups works for a directory | Not run | |
-| Clone Tree Preserving Hard Links opens clone view | Not run | |
-| Directory background drop actions appear only with picked sources | Not run | |
-| Unregister removes Explorer menu | Pass | Covered by automated installer lifecycle precheck through sparse-package removal after uninstall; visual Explorer menu confirmation still remains manual. |
+| Register modern sparse package from release artifact | Pass | Automated installer lifecycle precheck and user manual Explorer validation passed. |
+| Right-click one file and pick source | Pass | User manually verified the Windows Explorer menu flow from the release installer. |
+| Right-click multiple files/folders and pick N sources | Pass | User manually verified multi-source picking from the Windows Explorer menu. |
+| Drop picked source into a target folder as symlink | Pass | User manually verified symlink drop from the Windows Explorer menu. |
+| Drop picked source into a target folder as hard link | Pass | User manually verified hard-link drop from the Windows Explorer menu. |
+| Drop picked directory as hard-link tree | Pass | User manually verified directory hard-link tree routing from the Windows Explorer menu. |
+| Existing target conflict opens lightweight dialog | Pass | User manually verified the conflict dialog from the release installer. |
+| Rename / review each conflict flow works | Pass | User manually verified rename/review conflict handling. |
+| Overwrite, skip, cancel, and apply-to-remaining choices work | Pass | User manually verified all conflict choices. |
+| Clean drop exits silently with no full GUI | Pass | User manually verified clean Explorer drops exit without leaving the full GUI open. |
+| Non-clean result shows lightweight summary | Pass | User manually verified non-clean results show a lightweight summary. |
+| Open LinkForge expands lightweight window into full UI | Pass | User manually verified the full UI opens from the context menu. |
+| Compare Same File appears for exactly two files | Pass | User manually verified the two-file same-file menu item and flow. |
+| Show Link Count works for a file | Pass | User manually verified link-count routing from Explorer. |
+| Find Hard Link Siblings works | Pass | User manually verified sibling discovery routing from Explorer. |
+| Scan Hard Link Groups works for a directory | Pass | User manually verified group scanning routing from Explorer. |
+| Clone Tree Preserving Hard Links opens clone view | Pass | User manually verified clone-tree routing from Explorer. |
+| Directory background drop actions appear only with picked sources | Pass | User manually verified background drop action visibility before and after picking sources. |
+| Unregister removes Explorer menu | Pass | Automated uninstall precheck and user manual Explorer validation passed. |
 
 ## GNOME Files Advanced Menu
 
 Environment:
 
-- Date:
-- Distribution and version:
-- GNOME Files version:
-- `nautilus-python` package:
-- LinkForge version:
-- Installer or build artifact:
-- Tester:
+- Date: 2026-07-04
+- Distribution and version: Ubuntu 24.04 release-gate host.
+- GNOME Files version: Native Ubuntu GNOME Files package; exact package version not captured in this release log.
+- `nautilus-python` package: Native Ubuntu package installed for GNOME Files integration; exact package version not captured in this release log.
+- LinkForge version: 0.1.0.
+- Installer or build artifact: `target/release-assets/linux/linkforge_0.1.0-0ubuntu1_all.deb`, `target/release-assets/linux/linkforge-cli_0.1.0-0ubuntu1_amd64.deb`, `target/release-assets/linux/linkforge-gui_0.1.0-0ubuntu1_amd64.deb`, and `target/release-assets/linux/linkforge-context-menu-gnome_0.1.0-0ubuntu1_amd64.deb`.
+- Tester: User manual native Ubuntu GNOME Files release-gate validation.
 
 | Scenario | Result | Notes |
 | --- | --- | --- |
-| Install GNOME Files extension from native package or local build | Not run | |
-| Verify extension with configured GUI executable | Not run | |
-| Restart GNOME Files with `nautilus -q` | Not run | |
-| Right-click one file and pick source | Not run | |
-| Right-click multiple files/folders and pick N sources | Not run | |
-| Drop picked source into a target folder as symlink | Not run | |
-| Drop picked source into a target folder as hard link | Not run | |
-| Drop picked directory as hard-link tree | Not run | |
-| Existing target conflict opens lightweight dialog | Not run | |
-| Rename / review each conflict flow works | Not run | |
-| Overwrite, skip, cancel, and apply-to-remaining choices work | Not run | |
-| Clean drop exits silently with no full GUI | Not run | |
-| Non-clean result shows lightweight summary | Not run | |
-| Open LinkForge expands lightweight window into full UI | Not run | |
-| Compare Same File appears for exactly two files | Not run | |
-| Show Link Count works for a file | Not run | |
-| Find Hard Link Siblings works, with scan root where required | Not run | |
-| Scan Hard Link Groups works for a directory | Not run | |
-| Clone Tree Preserving Hard Links opens clone view | Not run | |
-| Directory background drop actions appear only with picked sources | Not run | |
-| Uninstall removes GNOME Files menu | Not run | |
+| Install GNOME Files extension from native package or local build | Pass | User manually verified installation from the native Ubuntu release packages. |
+| Verify extension with configured GUI executable | Pass | User manually verified the GNOME Files extension launches the packaged GUI. |
+| Restart GNOME Files with `nautilus -q` | Pass | User manually verified GNOME Files after restart. |
+| Right-click one file and pick source | Pass | User manually verified single-source picking in GNOME Files. |
+| Right-click multiple files/folders and pick N sources | Pass | User manually verified multi-source picking in GNOME Files. |
+| Drop picked source into a target folder as symlink | Pass | User manually verified symlink drop in GNOME Files. |
+| Drop picked source into a target folder as hard link | Pass | User manually verified hard-link drop in GNOME Files. |
+| Drop picked directory as hard-link tree | Pass | User manually verified directory hard-link tree routing in GNOME Files. |
+| Existing target conflict opens lightweight dialog | Pass | User manually verified conflict dialog behavior in GNOME Files. |
+| Rename / review each conflict flow works | Pass | User manually verified rename/review conflict handling. |
+| Overwrite, skip, cancel, and apply-to-remaining choices work | Pass | User manually verified all conflict choices. |
+| Clean drop exits silently with no full GUI | Pass | User manually verified clean GNOME Files drops exit without leaving the full GUI open. |
+| Non-clean result shows lightweight summary | Pass | User manually verified non-clean results show a lightweight summary. |
+| Open LinkForge expands lightweight window into full UI | Pass | User manually verified the full UI opens from GNOME Files. |
+| Compare Same File appears for exactly two files | Pass | User manually verified the two-file same-file menu item and flow. |
+| Show Link Count works for a file | Pass | User manually verified link-count routing from GNOME Files. |
+| Find Hard Link Siblings works, with scan root where required | Pass | User manually verified sibling discovery and scan-root behavior on Ubuntu. |
+| Scan Hard Link Groups works for a directory | Pass | User manually verified group scanning routing from GNOME Files. |
+| Clone Tree Preserving Hard Links opens clone view | Pass | User manually verified clone-tree routing from GNOME Files. |
+| Directory background drop actions appear only with picked sources | Pass | User manually verified background drop action visibility before and after picking sources. |
+| Uninstall removes GNOME Files menu | Pass | User manually verified GNOME Files menu removal after uninstall. |
 
 ## GNOME Files WSLg Precheck
 
