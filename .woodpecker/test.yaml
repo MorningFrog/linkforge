@@ -11,4 +11,4 @@ steps:
       - echo "Hello from Woodpecker CI!"
       - uname -a
       - cat /etc/os-release
-      - echo "CI test passed!"
+      - echo "CI test passed!!"
