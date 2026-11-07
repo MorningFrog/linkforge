@@ -1,0 +1,14 @@
+labels:
+  platform: linux/amd64
+
+when:
+  - event: push
+
+steps:
+  - name: verify-linux
+    image: alpine:3.21
+    commands:
+      - echo "Hello from Woodpecker CI!"
+      - uname -a
+      - cat /etc/os-release
+      - echo "CI test passed!"
