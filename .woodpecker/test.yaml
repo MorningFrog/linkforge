@@ -2,7 +2,7 @@ labels:
   platform: linux/amd64
 
 when:
-  - event: push
+  - event: [push, pull_request]
 
 steps:
   - name: verify-linux
